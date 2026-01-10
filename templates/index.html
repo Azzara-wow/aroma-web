@@ -137,10 +137,32 @@
     >
 </form>
 <div class="modes">
-    <a href="?user={{ user_name }}&mode=all" class="mode {% if mode == 'all' %}active{% endif %}">Общее</a>
-    <a href="?user={{ user_name }}&mode=mine" class="mode {% if mode == 'mine' %}active{% endif %}">Моё</a>
-    <a href="?user={{ user_name }}&mode=perfume" class="mode {% if mode == 'perfume' %}active{% endif %}">Духи</a>
+    <a href="?mode=all"
+       class="mode {% if mode == 'all' %}active{% endif %}"
+       data-mode="all">Общее</a>
+
+    <a href="?mode=mine"
+       class="mode {% if mode == 'mine' %}active{% endif %}"
+       data-mode="mine">Моё</a>
+
+    <a href="?mode=perfume"
+       class="mode {% if mode == 'perfume' %}active{% endif %}"
+       data-mode="perfume">Духи</a>
 </div>
+<input
+    type="text"
+    id="search"
+    placeholder="Поиск по названию"
+    style="
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 10px;
+        font-size: 14px;
+        border-radius: 6px;
+        border: none;
+    "
+>
+
 <button class="generate-btn" onclick="generateMessage()">
     Сформировать сообщение
 </button>
@@ -270,6 +292,46 @@ function copyMessage() {
     });
 }
 </script>
+<script>
+const userInput = document.querySelector('input[name="user"]');
+const modeLinks = document.querySelectorAll(".mode");
+
+function updateModeLinks() {
+    const user = userInput.value.trim();
+
+    modeLinks.forEach(link => {
+        const mode = link.dataset.mode;
+        const params = new URLSearchParams();
+
+        if (user) {
+            params.set("user", user);
+        }
+        params.set("mode", mode);
+
+        link.href = "?" + params.toString();
+    });
+}
+
+// обновляем ссылки при вводе имени
+userInput.addEventListener("input", updateModeLinks);
+
+// и сразу при загрузке страницы
+updateModeLinks();
+</script>
+<script>
+const searchInput = document.getElementById("search");
+
+searchInput.addEventListener("input", () => {
+    const query = searchInput.value.toLowerCase();
+    const items = document.querySelectorAll(".item");
+
+    items.forEach(item => {
+        const name = item.querySelector(".name").textContent.toLowerCase();
+        item.style.display = name.includes(query) ? "block" : "none";
+    });
+});
+</script>
+
 
 </body>
 </html>
