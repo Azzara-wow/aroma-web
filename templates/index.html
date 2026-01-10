@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Закупка ароматов</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0;
+            padding: 12px;
+            background: #0e1117;
+            color: #ffffff;
+        }
+
+        .item {
+            padding: 12px 8px;
+            border-bottom: 1px solid #2a2d34;
+            cursor: pointer;
+        }
+
+        .name {
+            font-size: 16px;
+            line-height: 1.3;
+        }
+
+        .price {
+            font-size: 14px;
+            opacity: 0.7;
+            margin-top: 4px;
+        }
+
+        .details {
+            margin-top: 10px;
+            display: none;
+        }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 18px;
+            border: none;
+            background: #2a2d34;
+            color: white;
+            font-size: 20px;
+        }
+        .row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .price {
+            font-size: 14px;
+            opacity: 0.7;
+            white-space: nowrap;
+            margin-left: 12px;
+        }
+        .right {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .owned {
+            font-size: 13px;
+            opacity: 0.8;
+        }
+
+        .mine {
+            background: rgba(100, 150, 255, 0.08);
+        }
+        .modes {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+        .mode {
+            flex: 1;
+            text-align: center;
+            padding: 8px 0;
+            border-radius: 6px;
+            text-decoration: none;
+            color: white;
+            background: #1a1d23;
+            font-size: 14px;
+            opacity: 0.6;
+        }
+        .mode.active {
+            opacity: 1;
+            background: #2a2f38;
+        }
+        .generate-btn {
+            width: 100%;
+            padding: 10px;
+            border-radius: 6px;
+            border: none;
+            background: #2a2f38;
+            color: white;
+            font-size: 15px;
+            margin-bottom: 6px;
+        }
+        #result {
+            background: #1a1d23;
+            color: white;
+            border-radius: 6px;
+            border: none;
+            padding: 8px;
+            font-size: 14px;
+        }
+        .planned {
+            background: rgba(120, 180, 120, 0.08);
+        }
+
+    </style>
+</head>
+<body>
+<form method="get" style="margin-bottom: 12px;">
+    <input
+        type="text"
+        name="user"
+        placeholder="Имя (как в файле)"
+        value="{{ user_name }}"
+        style="
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 6px;
+            border: none;
+        "
+    >
+</form>
+<div class="modes">
+    <a href="?user={{ user_name }}&mode=all" class="mode {% if mode == 'all' %}active{% endif %}">Общее</a>
+    <a href="?user={{ user_name }}&mode=mine" class="mode {% if mode == 'mine' %}active{% endif %}">Моё</a>
+    <a href="?user={{ user_name }}&mode=perfume" class="mode {% if mode == 'perfume' %}active{% endif %}">Духи</a>
+</div>
+<button class="generate-btn" onclick="generateMessage()">
+    Сформировать сообщение
+</button>
+
+<textarea
+    id="result"
+    rows="6"
+    readonly
+    style="width:100%; margin-top:8px; display:none;"
+></textarea>
+<button
+    id="copy-btn"
+    onclick="copyMessage()"
+    style="
+        width: 100%;
+        padding: 8px;
+        border-radius: 6px;
+        border: none;
+        background: #1a1d23;
+        color: white;
+        font-size: 14px;
+        margin-top: 6px;
+        display: none;
+    "
+>
+    Скопировать
+</button>
+
+
+<h2>Ароматы</h2>
+
+{% for aroma in aromas %}
+<div class="item {% if aroma.ordered_ml > 0 %}mine{% endif %}" onclick="toggle(this)">
+    <div class="row">
+        <div class="name">{{ aroma.aroma_name }}</div>
+        <div class="right">
+            {% if aroma.ordered_ml > 0 %}
+                <span class="owned">{{ aroma.ordered_ml }}</span>
+            {% endif %}
+            <span class="price">{{ aroma.price }}</span>
+        </div>
+    </div>
+
+    <div class="details">
+        <div class="input-row">
+            <input
+                type="text"
+                placeholder="Сколько взять"
+                class="amount-input"
+                data-name="{{ aroma.aroma_name }}"
+                onclick="event.stopPropagation()"
+            >
+        </div>
+
+        <div class="status">
+            <span class="collected">Набрано: {{ aroma.total_collected }}</span>
+            <span class="remaining">Осталось: {{ aroma.remaining_ml }}</span>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<script>
+    function toggle(item) {
+        const details = item.querySelector(".details");
+        details.style.display = details.style.display === "block"
+            ? "none"
+            : "block";
+    }
+</script>
+<script>
+function generateMessage() {
+    const inputs = document.querySelectorAll(".amount-input");
+    const lines = [];
+
+    inputs.forEach(input => {
+        const raw = input.value.trim().replace(",", ".");
+        if (!raw) return;
+
+        const value = parseFloat(raw);
+        if (isNaN(value) || value <= 0) return;
+
+        const name = input.dataset.name;
+        lines.push(`${name} — ${value}`);
+    });
+
+    if (lines.length === 0) {
+        alert("Ты ничего не добавила 🙂");
+        return;
+    }
+    const tag = "{{ order_tag }}";
+    const user = "{{ user_name }}";
+
+    const message = `${tag}\n\n${user}\n\n${lines.join("\n")}`;
+
+    const textarea = document.getElementById("result");
+    textarea.value = message;
+    textarea.style.display = "block";
+    document.getElementById("copy-btn").style.display = "block";
+}
+</script>
+<script>
+document.querySelectorAll(".amount-input").forEach(input => {
+    input.addEventListener("input", () => {
+        const item = input.closest(".item");
+        const raw = input.value.trim();
+
+        if (raw) {
+            item.classList.add("planned");
+        } else {
+            item.classList.remove("planned");
+        }
+    });
+});
+</script>
+<script>
+function copyMessage() {
+    const textarea = document.getElementById("result");
+
+    navigator.clipboard.writeText(textarea.value).then(() => {
+        const btn = document.getElementById("copy-btn");
+        btn.innerText = "Скопировано ✓";
+
+        setTimeout(() => {
+            btn.innerText = "Скопировать";
+        }, 1500);
+    });
+}
+</script>
+
+</body>
+</html>
