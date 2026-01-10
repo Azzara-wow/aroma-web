@@ -222,6 +222,16 @@
             <span class="collected">Набрано: {{ aroma.total_collected }}</span>
             <span class="remaining">Осталось: {{ aroma.remaining_ml }}</span>
         </div>
+        <div class="links">
+            <a
+                href="https://www.google.com/search?q=site:fragrantica.ru {{ aroma.aroma_name }}"
+                target="_blank"
+                style="font-size: 13px; opacity: 0.7; display: inline-block; margin-top: 6px;"
+                onclick="event.stopPropagation()"
+            >
+                Посмотреть на Fragrantica
+            </a>
+        </div>
     </div>
 </div>
 {% endfor %}
