@@ -268,17 +268,18 @@
 </script>
 <script>
 function generateMessage() {
-    const inputs = document.querySelectorAll(".amount-input");
     const lines = [];
 
-    inputs.forEach(input => {
-        const raw = input.value.trim().replace(",", ".");
+    Object.keys(localStorage).forEach(key => {
+        if (!key.startsWith("planned_")) return;
+
+        const name = key.replace("planned_", "");
+        const raw = localStorage.getItem(key);
         if (!raw) return;
 
-        const value = parseFloat(raw);
+        const value = parseFloat(raw.replace(",", "."));
         if (isNaN(value) || value <= 0) return;
 
-        const name = input.dataset.name;
         lines.push(`${name} — ${value}`);
     });
 
@@ -286,6 +287,7 @@ function generateMessage() {
         alert("Ты ничего не добавила 🙂");
         return;
     }
+
     const tag = "{{ order_tag }}";
     const user = "{{ user_name }}";
 
@@ -294,6 +296,7 @@ function generateMessage() {
     const textarea = document.getElementById("result");
     textarea.value = message;
     textarea.style.display = "block";
+
     document.getElementById("actions").style.display = "flex";
 }
 </script>
