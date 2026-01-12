@@ -163,35 +163,57 @@
     "
 >
 
-<button class="generate-btn" onclick="generateMessage()">
+<button type="button" class="generate-btn" onclick="generateMessage()">
     Сформировать сообщение
 </button>
-
 <textarea
     id="result"
     rows="6"
     readonly
     style="width:100%; margin-top:8px; display:none;"
 ></textarea>
-<button
-    id="copy-btn"
-    onclick="copyMessage()"
+<div
+    id="actions"
     style="
-        width: 100%;
-        padding: 8px;
-        border-radius: 6px;
-        border: none;
-        background: #1a1d23;
-        color: white;
-        font-size: 14px;
-        margin-top: 6px;
         display: none;
+        gap: 8px;
+        margin-top: 6px;
     "
 >
-    Скопировать
-</button>
+    <button
+        id="copy-btn"
+        type="button"
+        onclick="copyMessage()"
+        style="
+            flex: 1;
+            padding: 8px;
+            border-radius: 6px;
+            border: none;
+            background: #1a1d23;
+            color: white;
+            font-size: 14px;
+        "
+    >
+        Скопировать
+    </button>
 
-
+    <button
+        id="clear-btn"
+        type="button"
+        onclick="clearPlanned()"
+        style="
+            flex: 1;
+            padding: 8px;
+            border-radius: 6px;
+            border: none;
+            background: #1a1d23;
+            color: #ffb4b4;
+            font-size: 14px;
+        "
+    >
+        Очистить
+    </button>
+</div>
 <h2>Ароматы</h2>
 
 {% for aroma in aromas %}
@@ -272,22 +294,27 @@ function generateMessage() {
     const textarea = document.getElementById("result");
     textarea.value = message;
     textarea.style.display = "block";
-    document.getElementById("copy-btn").style.display = "block";
+    document.getElementById("actions").style.display = "flex";
 }
 </script>
 <script>
 document.querySelectorAll(".amount-input").forEach(input => {
+    const name = input.dataset.name;
+
     input.addEventListener("input", () => {
         const item = input.closest(".item");
-        const raw = input.value.trim();
+        const value = input.value.trim();
 
-        if (raw) {
+        if (value) {
+            localStorage.setItem("planned_" + name, value);
             item.classList.add("planned");
         } else {
+            localStorage.removeItem("planned_" + name);
             item.classList.remove("planned");
         }
     });
 });
+
 </script>
 <script>
 function copyMessage() {
@@ -301,6 +328,30 @@ function copyMessage() {
             btn.innerText = "Скопировать";
         }, 1500);
     });
+}
+</script>
+<script>
+function clearPlanned() {
+    // очищаем localStorage
+    Object.keys(localStorage).forEach(key => {
+        if (key.startsWith("planned_")) {
+            localStorage.removeItem(key);
+        }
+    });
+
+    // очищаем input и подсветку
+    document.querySelectorAll(".amount-input").forEach(input => {
+        input.value = "";
+        input.closest(".item").classList.remove("planned");
+    });
+
+    // очищаем результат
+    const textarea = document.getElementById("result");
+    textarea.value = "";
+    textarea.style.display = "none";
+
+    // прячем кнопки
+    document.getElementById("actions").style.display = "none";
 }
 </script>
 <script>
@@ -342,7 +393,17 @@ searchInput.addEventListener("input", () => {
     });
 });
 </script>
+<script>
+document.querySelectorAll(".amount-input").forEach(input => {
+    const name = input.dataset.name;
+    const saved = localStorage.getItem("planned_" + name);
 
+    if (saved) {
+        input.value = saved;
+        input.closest(".item").classList.add("planned");
+    }
+});
+</script>
 
 </body>
 </html>
