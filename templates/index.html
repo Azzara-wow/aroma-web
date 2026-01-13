@@ -150,9 +150,10 @@
        class="mode {% if mode == 'mine' %}active{% endif %}"
        data-mode="mine">Моё</a>
 
-    <a href="?mode=perfume"
-       class="mode {% if mode == 'perfume' %}active{% endif %}"
-       data-mode="perfume">Духи</a>
+    <a href="?mode=plan"
+   class="mode {% if mode == 'plan' %}active{% endif %}"
+   data-mode="plan">План заказа</a>
+
 </div>
 <input
     type="text"
@@ -219,12 +220,23 @@
         Очистить
     </button>
 </div>
+
 <h2>Ароматы</h2>
+
+{% if mode == 'plan' %}
+<div id="plan-container">
+    <div id="plan-list" style="margin-top: 8px; font-size: 15px;">
+        <!-- сюда JS подставит строки -->
+    </div>
+</div>
+{% endif %}
 
 {% for aroma in aromas %}
 <div class="item {% if aroma.ordered_ml > 0 %}mine{% endif %}" onclick="toggle(this)">
     <div class="row">
-        <div class="name">{{ aroma.aroma_name }}</div>
+        <div class="name copyable" data-copy="{{ aroma.aroma_name }}">
+        {{ aroma.aroma_name }}
+        </div>
         <div class="right">
             {% if aroma.ordered_ml > 0 %}
                 <span class="owned">{{ aroma.ordered_ml }}</span>
@@ -343,8 +355,10 @@ function clearPlanned() {
 
     // прячем кнопки
     document.getElementById("actions").style.display = "none";
+
     updateGenerateButtonState();
     updatePreview();
+    renderPlan();   // ← ВАЖНО: обновляем План заказа
 }
 </script>
 <script>
@@ -387,19 +401,22 @@ searchInput.addEventListener("input", () => {
 });
 </script>
 <script>
-document.querySelectorAll(".amount-input").forEach(input => {
-    const name = input.dataset.name;
-    const saved = localStorage.getItem("planned_" + name);
+document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll(".amount-input").forEach(input => {
+        const name = input.dataset.name;
+        const saved = localStorage.getItem("planned_" + name);
 
-    if (saved) {
-        input.value = saved;
-        input.closest(".item").classList.add("planned");
-    }
+        if (saved) {
+            input.value = saved;
+            input.closest(".item").classList.add("planned");
+        }
+    });
+
+    // один раз после восстановления
+    updateGenerateButtonState();
+    updatePreview();
+    renderPlan();
 });
-
-// один раз после восстановления
-updateGenerateButtonState();
-updatePreview();
 </script>
 
 <script>
@@ -419,10 +436,9 @@ function buildMessageText() {
     });
 
     if (lines.length === 0) return "";
-
     const tag = "{{ order_tag }}";
-    const user = "{{ user_name }}";
-
+    const userInput = document.querySelector('input[name="user"]');
+    const user = userInput ? userInput.value.trim() : "";
     return `${tag}\n\n${user}\n\n${lines.join("\n")}`;
 }
 </script>
@@ -454,6 +470,76 @@ function updatePreview() {
         textarea.style.display = "none";
     }
 }
+</script>
+<script>
+function renderPlan() {
+    const container = document.getElementById("plan-list");
+    if (!container) return;
+
+    container.innerHTML = "";
+
+    const items = [];
+
+    Object.keys(localStorage).forEach(key => {
+        if (!key.startsWith("planned_")) return;
+
+        const name = key.replace("planned_", "");
+        const value = localStorage.getItem(key);
+
+        if (value) {
+            items.push({ name, value });
+        }
+    });
+
+    if (items.length === 0) {
+        container.innerHTML = "<div style='opacity:0.6'>План пуст</div>";
+        return;
+    }
+
+    items.forEach(item => {
+        const row = document.createElement("div");
+        row.style.display = "flex";
+        row.style.justifyContent = "space-between";
+        row.style.padding = "6px 0";
+        row.innerHTML = `
+            <span class="copyable" data-copy="${item.name}">
+                ${item.name}
+            </span>
+            <strong>${item.value}</strong>
+        `;
+        container.appendChild(row);
+    });
+}
+</script>
+<script>
+let pressTimer = null;
+
+document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll(".copyable").forEach(el => {
+        el.addEventListener("touchstart", () => {
+            pressTimer = setTimeout(() => {
+                const text = el.dataset.copy;
+                if (!text) return;
+
+                navigator.clipboard.writeText(text);
+
+                // лёгкий визуальный фидбек
+                el.style.opacity = "0.4";
+                setTimeout(() => {
+                    el.style.opacity = "1";
+                }, 300);
+            }, 500);
+        });
+
+        el.addEventListener("touchend", () => {
+            clearTimeout(pressTimer);
+        });
+
+        el.addEventListener("touchmove", () => {
+            clearTimeout(pressTimer);
+        });
+    });
+});
 </script>
 
 

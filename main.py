@@ -11,7 +11,7 @@ templates = Jinja2Templates(directory="templates")
 
 # === НАСТРОЙКИ ===
 SHEET_URL = "https://docs.google.com/spreadsheets/d/12VphWS6CAQE4vMLNY9wOdSooIopiSbuKjIZv07zJzL0/edit?gid=0#gid=0"
-SECTION_ANCHOR_KEYWORD = "Al Rehab Choco Musk"
+
 # Тексты для сообщений в Telegram
 ORDER_TAGS = "#Luziянварь"
 REORDER_TAGS = "#Luziянварь #добор"
@@ -123,20 +123,13 @@ def index(request: Request):
     # df — это то, что показываем
     df = df_full.copy()
 
+    #режим "План заказа"
+    if mode == "plan":
+        df = df.iloc[0:0]  # пустой DataFrame
+
     # режим "Моё"
-    if mode == "mine":
+    elif mode == "mine":
         df = df[df["ordered_ml"] > 0]
-
-    # режим "Духи"
-    elif mode == "perfume":
-        anchor_index = None
-        for idx, row in df.iterrows():
-            if SECTION_ANCHOR_KEYWORD.lower() in str(row["aroma_name"]).lower():
-                anchor_index = idx
-                break
-
-        if anchor_index is not None:
-            df = df.iloc[anchor_index:]
 
     # 🔴 ВАЖНО: хештег считаем по ПОЛНОМУ списку
     is_reorder = (df_full["ordered_ml"] > 0).any()
