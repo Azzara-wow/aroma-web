@@ -117,6 +117,11 @@
         .planned {
             background: rgba(120, 180, 120, 0.08);
         }
+        .generate-btn.active {
+            background: #2f6f3e;   /* светло-зелёная заливка */
+            color: #ffffff;
+        }
+
 
     </style>
 </head>
@@ -257,7 +262,6 @@
     </div>
 </div>
 {% endfor %}
-
 <script>
     function toggle(item) {
         const details = item.querySelector(".details");
@@ -268,30 +272,12 @@
 </script>
 <script>
 function generateMessage() {
-    const lines = [];
+    const message = buildMessageText();
 
-    Object.keys(localStorage).forEach(key => {
-        if (!key.startsWith("planned_")) return;
-
-        const name = key.replace("planned_", "");
-        const raw = localStorage.getItem(key);
-        if (!raw) return;
-
-        const value = parseFloat(raw.replace(",", "."));
-        if (isNaN(value) || value <= 0) return;
-
-        lines.push(`${name} — ${value}`);
-    });
-
-    if (lines.length === 0) {
+    if (!message) {
         alert("Ты ничего не добавила 🙂");
         return;
     }
-
-    const tag = "{{ order_tag }}";
-    const user = "{{ user_name }}";
-
-    const message = `${tag}\n\n${user}\n\n${lines.join("\n")}`;
 
     const textarea = document.getElementById("result");
     textarea.value = message;
@@ -300,6 +286,7 @@ function generateMessage() {
     document.getElementById("actions").style.display = "flex";
 }
 </script>
+
 <script>
 document.querySelectorAll(".amount-input").forEach(input => {
     const name = input.dataset.name;
@@ -315,9 +302,10 @@ document.querySelectorAll(".amount-input").forEach(input => {
             localStorage.removeItem("planned_" + name);
             item.classList.remove("planned");
         }
+        updateGenerateButtonState();
+        updatePreview();
     });
 });
-
 </script>
 <script>
 function copyMessage() {
@@ -355,6 +343,8 @@ function clearPlanned() {
 
     // прячем кнопки
     document.getElementById("actions").style.display = "none";
+    updateGenerateButtonState();
+    updatePreview();
 }
 </script>
 <script>
@@ -406,7 +396,66 @@ document.querySelectorAll(".amount-input").forEach(input => {
         input.closest(".item").classList.add("planned");
     }
 });
+
+// один раз после восстановления
+updateGenerateButtonState();
+updatePreview();
 </script>
+
+<script>
+function buildMessageText() {
+    const lines = [];
+
+    Object.keys(localStorage).forEach(key => {
+        if (!key.startsWith("planned_")) return;
+
+        const name = key.replace("planned_", "");
+        const raw = localStorage.getItem(key);
+        const value = parseFloat(raw.replace(",", "."));
+
+        if (!isNaN(value) && value > 0) {
+            lines.push(`${name} — ${value}`);
+        }
+    });
+
+    if (lines.length === 0) return "";
+
+    const tag = "{{ order_tag }}";
+    const user = "{{ user_name }}";
+
+    return `${tag}\n\n${user}\n\n${lines.join("\n")}`;
+}
+</script>
+<script>
+function updateGenerateButtonState() {
+    const hasPlanned = Object.keys(localStorage)
+        .some(key => key.startsWith("planned_"));
+
+    const btn = document.querySelector(".generate-btn");
+
+    if (hasPlanned) {
+        btn.classList.add("active");
+    } else {
+        btn.classList.remove("active");
+    }
+}
+</script>
+
+<script>
+function updatePreview() {
+    const textarea = document.getElementById("result");
+    const message = buildMessageText();
+
+    if (message) {
+        textarea.value = message;
+        textarea.style.display = "block";
+    } else {
+        textarea.value = "";
+        textarea.style.display = "none";
+    }
+}
+</script>
+
 
 </body>
 </html>
