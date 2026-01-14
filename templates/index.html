@@ -121,8 +121,26 @@
             background: #2f6f3e;   /* светло-зелёная заливка */
             color: #ffffff;
         }
+        #toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(40, 40, 40, 0.95);
+            color: white;
+            padding: 10px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease, transform 0.25s ease;
+            z-index: 9999;
+        }
 
-
+        #toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(-6px);
+        }
     </style>
 </head>
 <body>
@@ -402,6 +420,11 @@ searchInput.addEventListener("input", () => {
 </script>
 <script>
 document.addEventListener("DOMContentLoaded", () => {
+    const savedUser = localStorage.getItem("user_name");
+    if (savedUser && userInput && !userInput.value) {
+        userInput.value = savedUser;
+    }
+
     document.querySelectorAll(".amount-input").forEach(input => {
         const name = input.dataset.name;
         const saved = localStorage.getItem("planned_" + name);
@@ -412,7 +435,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // один раз после восстановления
     updateGenerateButtonState();
     updatePreview();
     renderPlan();
@@ -512,36 +534,63 @@ function renderPlan() {
 }
 </script>
 <script>
+function showToast(text = "Скопировано ✓") {
+    const toast = document.getElementById("toast");
+    if (!toast) return;
+
+    toast.textContent = text;
+    toast.classList.add("show");
+
+    clearTimeout(toast._timer);
+
+    toast._timer = setTimeout(() => {
+        toast.classList.remove("show");
+    }, 1200);
+}
+</script>
+<script>
 let pressTimer = null;
 
-document.addEventListener("DOMContentLoaded", () => {
-    document.querySelectorAll(".copyable").forEach(el => {
-        el.addEventListener("touchstart", () => {
-            pressTimer = setTimeout(() => {
-                const text = el.dataset.copy;
-                if (!text) return;
+document.addEventListener("touchstart", (e) => {
+    const el = e.target.closest(".copyable");
+    if (!el) return;
 
-                navigator.clipboard.writeText(text);
+    pressTimer = setTimeout(() => {
+        const text = el.dataset.copy;
+        if (!text) return;
 
-                // лёгкий визуальный фидбек
-                el.style.opacity = "0.4";
-                setTimeout(() => {
-                    el.style.opacity = "1";
-                }, 300);
-            }, 500);
+        navigator.clipboard.writeText(text).then(() => {
+            showToast("Скопировано ✓");
+
+            el.style.opacity = "0.4";
+            setTimeout(() => {
+                el.style.opacity = "1";
+            }, 300);
         });
+    }, 500);
+});
 
-        el.addEventListener("touchend", () => {
-            clearTimeout(pressTimer);
-        });
+document.addEventListener("touchend", () => {
+    clearTimeout(pressTimer);
+});
 
-        el.addEventListener("touchmove", () => {
-            clearTimeout(pressTimer);
-        });
-    });
+document.addEventListener("touchmove", () => {
+    clearTimeout(pressTimer);
 });
 </script>
 
+<script>
+if (userInput) {
+    userInput.addEventListener("input", () => {
+        localStorage.setItem("user_name", userInput.value.trim());
+        updateModeLinks();
+        updatePreview();
+    });
+}
+</script>
 
+<div id="toast">
+    Скопировано ✓
+</div>
 </body>
 </html>
