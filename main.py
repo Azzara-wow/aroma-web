@@ -99,14 +99,22 @@ def prepare_dataframe(df: pd.DataFrame, user_name: str) -> pd.DataFrame:
     result["price"] = pd.to_numeric(result["price"], errors="coerce").fillna(0)
 
     # данные строго из файла организатора
+    # данные строго из файла организатора
+
+    total_col = df["Набрано"] if "Набрано" in df.columns else pd.Series([0] * len(df))
     result["total_collected"] = (
-        pd.to_numeric(df.get("Набрано"), errors="coerce")
+        pd.to_numeric(total_col, errors="coerce")
         .fillna(0)
         .astype(int)
     )
 
+    remaining_col = (
+        df["Осталось набрать"]
+        if "Осталось набрать" in df.columns
+        else pd.Series([0] * len(df))
+    )
     result["remaining_ml"] = (
-        pd.to_numeric(df.get("Осталось набрать"), errors="coerce")
+        pd.to_numeric(remaining_col, errors="coerce")
         .fillna(0)
         .astype(int)
     )
