@@ -83,7 +83,13 @@ def prepare_dataframe(df: pd.DataFrame, user_name: str) -> pd.DataFrame:
         result["ordered_ml"] = 0
 
     # цена
-    result["price"] = df.apply(extract_first_valid_number, axis=1).fillna(0)
+    # цена
+    price_series = df.apply(extract_first_valid_number, axis=1)
+
+    price_series = pd.to_numeric(price_series, errors="coerce")
+
+    result["price"] = price_series.fillna(0)
+
     result["price"] = (
         result["price"]
         .astype(str)
