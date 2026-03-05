@@ -8,8 +8,11 @@ from urllib.parse import urlparse, parse_qs
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
+from fastapi import Request
+
 @app.get("/health")
-def health():
+@app.head("/health")
+async def health(request: Request):
     return {"status": "ok"}
 
 # === НАСТРОЙКИ ===
