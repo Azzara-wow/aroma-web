@@ -4,593 +4,274 @@
     <meta charset="UTF-8">
     <title>Закупка ароматов</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-
     <style>
-        body {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-            margin: 0;
-            padding: 12px;
-            background: #0e1117;
-            color: #ffffff;
-        }
-
-        .item {
-            padding: 12px 8px;
-            border-bottom: 1px solid #2a2d34;
-            cursor: pointer;
-        }
-
-        .name {
-            font-size: 16px;
-            line-height: 1.3;
-        }
-
-        .price {
-            font-size: 14px;
-            opacity: 0.7;
-            margin-top: 4px;
-        }
-
-        .details {
-            margin-top: 10px;
-            display: none;
-        }
-
-        .controls {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-        }
-
-        .btn {
-            width: 36px;
-            height: 36px;
-            border-radius: 18px;
-            border: none;
-            background: #2a2d34;
-            color: white;
-            font-size: 20px;
-        }
-        .row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .price {
-            font-size: 14px;
-            opacity: 0.7;
-            white-space: nowrap;
-            margin-left: 12px;
-        }
-        .right {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-        .owned {
-            font-size: 13px;
-            opacity: 0.8;
-        }
-
-        .mine {
-            background: rgba(100, 150, 255, 0.08);
-        }
-        .modes {
-            display: flex;
-            gap: 6px;
-            margin-bottom: 12px;
-        }
-        .mode {
-            flex: 1;
-            text-align: center;
-            padding: 8px 0;
-            border-radius: 6px;
-            text-decoration: none;
-            color: white;
-            background: #1a1d23;
-            font-size: 14px;
-            opacity: 0.6;
-        }
-        .mode.active {
-            opacity: 1;
-            background: #2a2f38;
-        }
-        .generate-btn {
-            width: 100%;
-            padding: 10px;
-            border-radius: 6px;
-            border: none;
-            background: #2a2f38;
-            color: white;
-            font-size: 15px;
-            margin-bottom: 6px;
-        }
-        #result {
-            background: #1a1d23;
-            color: white;
-            border-radius: 6px;
-            border: none;
-            padding: 8px;
-            font-size: 14px;
-        }
-        .planned {
-            background: rgba(120, 180, 120, 0.08);
-        }
-        .generate-btn.active {
-            background: #2f6f3e;   /* светло-зелёная заливка */
-            color: #ffffff;
-        }
-        #toast {
-            position: fixed;
-            bottom: 24px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(40, 40, 40, 0.95);
-            color: white;
-            padding: 10px 16px;
-            border-radius: 20px;
-            font-size: 14px;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.25s ease, transform 0.25s ease;
-            z-index: 9999;
-        }
-
-        #toast.show {
-            opacity: 1;
-            transform: translateX(-50%) translateY(-6px);
-        }
+        body {font-family: system-ui, -apple-system, sans-serif; margin:0; padding:12px; background:#0e1117; color:#fff;}
+        .tabs, .modes {display:flex; gap:6px; margin-bottom:12px; overflow-x:auto; padding-bottom:8px;}
+        .tab, .mode {padding:8px 16px; border-radius:6px; background:#1a1d23; color:white; font-size:14px; white-space:nowrap; opacity:0.7;}
+        .tab.active, .mode.active {opacity:1; background:#2a2f38;}
+        .item {padding:12px 8px; border-bottom:1px solid #2a2d34; cursor:pointer;}
+        .name {font-size:16px; line-height:1.3;}
+        .meta {font-size:13px; opacity:0.8; margin-top:2px;}
+        .price {font-size:14px; opacity:0.7; margin-left:12px;}
+        .row {display:flex; justify-content:space-between; align-items:center;}
+        .right {display:flex; gap:8px; align-items:center;}
+        .owned {font-size:13px; opacity:0.8; background:#2a2f38; padding:2px 6px; border-radius:4px;}
+        .mine {background:rgba(100,150,255,0.08);}
+        .planned {background:rgba(120,180,120,0.18) !important;}
+        .details {margin-top:10px; display:none;}
+        .prices {margin:8px 0; font-size:14px;}
+        .status {font-size:13px; opacity:0.85; margin:8px 0;}
+        .generate-btn {width:100%; padding:12px; border-radius:6px; border:none; background:#2a2f38; color:white; font-size:15px; margin:10px 0; opacity:0.6; transition:opacity 0.2s;}
+        .generate-btn.active {background:#2f6f3e; opacity:1;}
+        #result {width:100%; background:#1a1d23; color:white; border-radius:6px; padding:8px; display:none; margin-top:8px;}
+        #toast {position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:rgba(40,40,40,0.95); color:white; padding:10px 16px; border-radius:20px; opacity:0; transition:all 0.25s; z-index:9999;}
+        #toast.show {opacity:1; transform:translateX(-50%) translateY(-6px);}
     </style>
 </head>
 <body>
-<form method="get" style="margin-bottom: 12px;">
-    <input
-        type="text"
-        name="user"
-        placeholder="Имя (как в файле)"
-        value="{{ user_name }}"
-        style="
-            width: 100%;
-            padding: 10px;
-            font-size: 16px;
-            border-radius: 6px;
-            border: none;
-        "
-    >
+
+<form method="get" style="margin-bottom:12px;">
+    <input type="text" name="user" placeholder="Имя (как в файле)" value="{{ user_name }}" style="width:100%; padding:10px; font-size:16px; border-radius:6px; border:none;">
 </form>
+
+<div class="tabs">
+    {% for t in tabs %}
+    <a href="?tab={{ t }}&user={{ user_name }}" class="tab {% if tab == t %}active{% endif %}">{{ t }}</a>
+    {% endfor %}
+</div>
+
 <div class="modes">
-    <a href="?mode=all"
-       class="mode {% if mode == 'all' %}active{% endif %}"
-       data-mode="all">Общее</a>
-
-    <a href="?mode=mine"
-       class="mode {% if mode == 'mine' %}active{% endif %}"
-       data-mode="mine">Моё</a>
-
-    <a href="?mode=plan"
-   class="mode {% if mode == 'plan' %}active{% endif %}"
-   data-mode="plan">План заказа</a>
-
-</div>
-<input
-    type="text"
-    id="search"
-    placeholder="Поиск по названию"
-    style="
-        width: 100%;
-        padding: 8px;
-        margin-bottom: 10px;
-        font-size: 16px;
-        border-radius: 6px;
-        border: none;
-    "
->
-
-<button type="button" class="generate-btn" onclick="generateMessage()">
-    Сформировать сообщение
-</button>
-<textarea
-    id="result"
-    rows="6"
-    readonly
-    style="width:100%; margin-top:8px; display:none;"
-></textarea>
-<div
-    id="actions"
-    style="
-        display: none;
-        gap: 8px;
-        margin-top: 6px;
-    "
->
-    <button
-        id="copy-btn"
-        type="button"
-        onclick="copyMessage()"
-        style="
-            flex: 1;
-            padding: 8px;
-            border-radius: 6px;
-            border: none;
-            background: #1a1d23;
-            color: white;
-            font-size: 14px;
-        "
-    >
-        Скопировать
-    </button>
-
-    <button
-        id="clear-btn"
-        type="button"
-        onclick="clearPlanned()"
-        style="
-            flex: 1;
-            padding: 8px;
-            border-radius: 6px;
-            border: none;
-            background: #1a1d23;
-            color: #ffb4b4;
-            font-size: 14px;
-        "
-    >
-        Очистить
-    </button>
+    <a href="?mode=mine&user={{ user_name }}" class="mode {% if mode == 'mine' %}active{% endif %}">Моё</a>
 </div>
 
-<h2>Ароматы</h2>
+<input type="text" id="search" placeholder="Поиск по названию" style="width:100%; padding:8px; margin-bottom:10px; font-size:16px; border-radius:6px; border:none;">
 
-{% if mode == 'plan' %}
-<div id="plan-container">
-    <div id="plan-list" style="margin-top: 8px; font-size: 15px;">
-        <!-- сюда JS подставит строки -->
-    </div>
+<button type="button" class="generate-btn" onclick="generateMessage()">Сформировать сообщение</button>
+<textarea id="result" rows="6" readonly style="width:100%; display:none;"></textarea>
+
+<div id="actions" style="display:flex; gap:8px; margin-top:6px;">
+    <button id="copy-btn" onclick="copyMessage()" style="flex:1; padding:8px; border-radius:6px; border:none; background:#1a1d23; color:white;">Скопировать</button>
+    <button id="clear-btn" onclick="clearPlanned()" style="flex:1; padding:8px; border-radius:6px; border:none; background:#1a1d23; color:#ffb4b4;">Очистить выбор</button>
 </div>
-{% endif %}
+
+<h2>
+    {% if mode == 'mine' %}Мои заказы
+    {% else %}{{ tab if tab else "Все ароматы" }}{% endif %}
+</h2>
 
 {% for aroma in aromas %}
 <div class="item {% if aroma.ordered_ml > 0 %}mine{% endif %}" onclick="toggle(this)">
     <div class="row">
-        <div class="name copyable" data-copy="{{ aroma.aroma_name }}">
-        {{ aroma.aroma_name }}
+        <div>
+            <div class="name copyable" data-copy="{{ aroma.aroma_name }}">{{ aroma.aroma_name }}</div>
+            {% if aroma.category == 'Духи' and aroma.view %}
+                <div class="meta">Пол: {{ aroma.view }}</div>
+            {% endif %}
         </div>
         <div class="right">
-            {% if aroma.ordered_ml > 0 %}
-                <span class="owned">{{ aroma.ordered_ml }}</span>
+            {% if aroma.collected > 0 %}
+                <span class="owned">Набрано: {{ aroma.collected }}</span>
             {% endif %}
-            <span class="price">{{ aroma.price }}</span>
+            <span class="price">{{ aroma.price }} ₽</span>
         </div>
     </div>
 
     <div class="details">
-        <div class="input-row">
-            <input
-                type="text"
-                placeholder="Сколько взять"
-                class="amount-input"
-                data-name="{{ aroma.aroma_name }}"
-                style="font-size: 16px;"
-                onclick="event.stopPropagation()"
-            >
-        </div>
+        {% if aroma.category == 'Духи' %}
+            <a href="https://www.google.com/search?q=site:fragrantica.ru {{ aroma.aroma_name | urlencode }}"
+               target="_blank" style="font-size:14px; color:#8ab4f7; display:block; margin:8px 0;"
+               onclick="event.stopPropagation()">🔍 Поиск на Fragrantica.ru</a>
 
-        <div class="status">
-            <span class="collected">Набрано: {{ aroma.total_collected }}</span>
-            <span class="remaining">Осталось: {{ aroma.remaining_ml }}</span>
-        </div>
-        <div class="links">
-            <a
-                href="https://www.google.com/search?q=site:fragrantica.ru {{ aroma.aroma_name }}"
-                target="_blank"
-                style="font-size: 13px; opacity: 0.7; display: inline-block; margin-top: 6px;"
-                onclick="event.stopPropagation()"
-            >
-                Посмотреть на Fragrantica
-            </a>
-        </div>
+            <div class="status" style="margin:10px 0; line-height:1.5;">
+                <div>Набрано: <strong>{{ aroma.collected }} мл</strong></div>
+                <div>Осталось набрать: <strong>{{ aroma.remaining }} мл</strong></div>
+                {% if aroma.ordered_ml > 0 %}
+                    <div>Ты заказала: <strong>{{ aroma.ordered_ml }} мл</strong></div>
+                {% endif %}
+            </div>
+
+            <input type="text" placeholder="Заказать (мл)" class="amount-input"
+                   data-name="{{ aroma.aroma_name }}"
+                   style="width:100%; padding:10px; font-size:16px; border-radius:6px; border:none; margin-top:8px;"
+                   onclick="event.stopPropagation()">
+        {% else %}
+            {% if aroma.view %}<div style="opacity:0.8;">Вид: {{ aroma.view }}</div>{% endif %}
+            <div class="prices">
+                {% for p in aroma.prices %}
+                    <div>{{ p.label }}: <strong>{{ p.value }}</strong> ₽</div>
+                {% endfor %}
+            </div>
+            <div class="status">
+                Набрано: <strong>{{ aroma.collected }}</strong> 
+                Осталось: <strong>{{ aroma.remaining }}</strong>
+            </div>
+            <input type="text" placeholder="Сколько взять" class="amount-input"
+                   data-name="{{ aroma.aroma_name }}"
+                   style="width:100%; padding:10px; font-size:16px; border-radius:6px; border:none; margin-top:8px;"
+                   onclick="event.stopPropagation()">
+        {% endif %}
     </div>
 </div>
 {% endfor %}
+
 <script>
-    function toggle(item) {
-        const details = item.querySelector(".details");
-        details.style.display = details.style.display === "block"
-            ? "none"
-            : "block";
-    }
-</script>
-<script>
+// ==================== ОСНОВНЫЕ ФУНКЦИИ ====================
+function toggle(item) {
+    const details = item.querySelector(".details");
+    details.style.display = details.style.display === "block" ? "none" : "block";
+}
+
 function generateMessage() {
     const message = buildMessageText();
+    const textarea = document.getElementById("result");
 
-    if (!message) {
-        alert("Ты ничего не добавила 🙂");
+    if (!message.trim()) {
+        showToast("Ничего не выбрано");
+        textarea.style.display = "none";
         return;
     }
 
-    const textarea = document.getElementById("result");
     textarea.value = message;
     textarea.style.display = "block";
-
-    document.getElementById("actions").style.display = "flex";
+    showToast("Готово!");
 }
-</script>
 
-<script>
-document.querySelectorAll(".amount-input").forEach(input => {
-    const name = input.dataset.name;
-
-    input.addEventListener("input", () => {
-        const item = input.closest(".item");
-        const value = input.value.trim();
-
-        if (value) {
-            localStorage.setItem("planned_" + name, value);
-            item.classList.add("planned");
-        } else {
-            localStorage.removeItem("planned_" + name);
-            item.classList.remove("planned");
-        }
-        updateGenerateButtonState();
-        updatePreview();
-    });
-});
-</script>
-<script>
 function copyMessage() {
     const textarea = document.getElementById("result");
-
+    if (!textarea.value.trim()) return;
     navigator.clipboard.writeText(textarea.value).then(() => {
-        const btn = document.getElementById("copy-btn");
-        btn.innerText = "Скопировано ✓";
-
-        setTimeout(() => {
-            btn.innerText = "Скопировать";
-        }, 1500);
+        showToast("Скопировано ✓");
     });
 }
-</script>
-<script>
+
 function clearPlanned() {
-    // очищаем localStorage
     Object.keys(localStorage).forEach(key => {
-        if (key.startsWith("planned_")) {
-            localStorage.removeItem(key);
-        }
+        if (key.startsWith("planned_")) localStorage.removeItem(key);
     });
 
-    // очищаем input и подсветку
     document.querySelectorAll(".amount-input").forEach(input => {
         input.value = "";
-        input.closest(".item").classList.remove("planned");
+        input.closest(".item")?.classList.remove("planned");
     });
 
-    // очищаем результат
-    const textarea = document.getElementById("result");
-    textarea.value = "";
-    textarea.style.display = "none";
-
-    // прячем кнопки
-    document.getElementById("actions").style.display = "none";
+    document.getElementById("result").value = "";
+    document.getElementById("result").style.display = "none";
 
     updateGenerateButtonState();
     updatePreview();
-    renderPlan();   // ← ВАЖНО: обновляем План заказа
-}
-</script>
-<script>
-const userInput = document.querySelector('input[name="user"]');
-const modeLinks = document.querySelectorAll(".mode");
-
-function updateModeLinks() {
-    const user = userInput.value.trim();
-
-    modeLinks.forEach(link => {
-        const mode = link.dataset.mode;
-        const params = new URLSearchParams();
-
-        if (user) {
-            params.set("user", user);
-        }
-        params.set("mode", mode);
-
-        link.href = "?" + params.toString();
-    });
+    showToast("Выбор очищен");
 }
 
-// обновляем ссылки при вводе имени
-userInput.addEventListener("input", updateModeLinks);
-
-// и сразу при загрузке страницы
-updateModeLinks();
-</script>
-<script>
-const searchInput = document.getElementById("search");
-
-searchInput.addEventListener("input", () => {
-    const query = searchInput.value.toLowerCase();
-    const items = document.querySelectorAll(".item");
-
-    items.forEach(item => {
-        const name = item.querySelector(".name").textContent.toLowerCase();
-        item.style.display = name.includes(query) ? "block" : "none";
-    });
-});
-</script>
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-    const savedUser = localStorage.getItem("user_name");
-    if (savedUser && userInput && !userInput.value) {
-        userInput.value = savedUser;
-    }
-
-    document.querySelectorAll(".amount-input").forEach(input => {
-        const name = input.dataset.name;
-        const saved = localStorage.getItem("planned_" + name);
-
-        if (saved) {
-            input.value = saved;
-            input.closest(".item").classList.add("planned");
-        }
-    });
-
-    updateGenerateButtonState();
-    updatePreview();
-    renderPlan();
-});
-</script>
-
-<script>
 function buildMessageText() {
     const lines = [];
-
     Object.keys(localStorage).forEach(key => {
-        if (!key.startsWith("planned_")) return;
-
-        const name = key.replace("planned_", "");
-        const raw = localStorage.getItem(key);
-        const value = parseFloat(raw.replace(",", "."));
-
-        if (!isNaN(value) && value > 0) {
-            lines.push(`${name} — ${value}`);
+        if (key.startsWith("planned_")) {
+            const name = key.replace("planned_", "");
+            const val = localStorage.getItem(key)?.trim();
+            if (val && val !== "" && !isNaN(parseFloat(val))) {
+                lines.push(`${name} — ${val}`);
+            }
         }
     });
-
     if (lines.length === 0) return "";
+
     const tag = "{{ order_tag }}";
-    const userInput = document.querySelector('input[name="user"]');
-    const user = userInput ? userInput.value.trim() : "";
-    return `${tag}\n\n${user}\n\n${lines.join("\n")}`;
+    const user = document.querySelector('input[name="user"]')?.value.trim() || "";
+    return `${tag}\n\n${user ? user + '\n' : ''}${lines.join("\n")}`;
 }
-</script>
-<script>
+
 function updateGenerateButtonState() {
-    const hasPlanned = Object.keys(localStorage)
-        .some(key => key.startsWith("planned_"));
-
-    const btn = document.querySelector(".generate-btn");
-
-    if (hasPlanned) {
-        btn.classList.add("active");
-    } else {
-        btn.classList.remove("active");
-    }
+    const hasPlanned = Object.keys(localStorage).some(k => k.startsWith("planned_") && localStorage.getItem(k)?.trim());
+    document.querySelector(".generate-btn").classList.toggle("active", hasPlanned);
 }
-</script>
 
-<script>
 function updatePreview() {
     const textarea = document.getElementById("result");
-    const message = buildMessageText();
-
-    if (message) {
-        textarea.value = message;
+    const msg = buildMessageText();
+    if (msg.trim()) {
+        textarea.value = msg;
         textarea.style.display = "block";
     } else {
-        textarea.value = "";
         textarea.style.display = "none";
     }
 }
-</script>
-<script>
-function renderPlan() {
-    const container = document.getElementById("plan-list");
-    if (!container) return;
 
-    container.innerHTML = "";
+function showToast(text) {
+    const toast = document.getElementById("toast");
+    toast.textContent = text;
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 1800);
+}
 
-    const items = [];
+// ==================== ВОССТАНОВЛЕНИЕ СОСТОЯНИЯ ====================
+document.addEventListener("DOMContentLoaded", () => {
+    const userInput = document.querySelector('input[name="user"]');
+    if (userInput) {
+        const saved = localStorage.getItem("user_name");
+        if (saved && !userInput.value) userInput.value = saved;
+        userInput.addEventListener("input", () => {
+            localStorage.setItem("user_name", userInput.value.trim());
+            updateAllLinks();
+        });
+    }
 
-    Object.keys(localStorage).forEach(key => {
-        if (!key.startsWith("planned_")) return;
+    // Восстановление выбранных товаров
+    document.querySelectorAll(".amount-input").forEach(input => {
+        const name = input.dataset.name;
+        const saved = localStorage.getItem("planned_" + name);
+        if (saved && saved.trim() !== "") {
+            input.value = saved;
+            input.closest(".item")?.classList.add("planned");
+        }
 
-        const name = key.replace("planned_", "");
-        const value = localStorage.getItem(key);
+        // Live-подсветка и сохранение при вводе
+        input.addEventListener("input", () => {
+            const val = input.value.trim();
+            const item = input.closest(".item");
+            if (val) {
+                localStorage.setItem("planned_" + name, val);
+                item?.classList.add("planned");
+            } else {
+                localStorage.removeItem("planned_" + name);
+                item?.classList.remove("planned");
+            }
+            updateGenerateButtonState();
+            updatePreview();
+        });
+    });
 
-        if (value) {
-            items.push({ name, value });
+    // Дополнительная проверка подсветки по имени (на всякий случай)
+    document.querySelectorAll(".item").forEach(item => {
+        const nameEl = item.querySelector(".name");
+        if (!nameEl) return;
+        const name = nameEl.textContent.trim();
+        if (localStorage.getItem("planned_" + name)?.trim()) {
+            item.classList.add("planned");
         }
     });
 
-    if (items.length === 0) {
-        container.innerHTML = "<div style='opacity:0.6'>План пуст</div>";
-        return;
-    }
+    updateGenerateButtonState();
+    updatePreview();
+    updateAllLinks();
+});
 
-    items.forEach(item => {
-        const row = document.createElement("div");
-        row.style.display = "flex";
-        row.style.justifyContent = "space-between";
-        row.style.padding = "6px 0";
-        row.innerHTML = `
-            <span class="copyable" data-copy="${item.name}">
-                ${item.name}
-            </span>
-            <strong>${item.value}</strong>
-        `;
-        container.appendChild(row);
+function updateAllLinks() {
+    const user = document.querySelector('input[name="user"]')?.value.trim() || "";
+    const params = new URLSearchParams();
+    if (user) params.set("user", user);
+
+    document.querySelectorAll('.tab').forEach(link => {
+        params.set("tab", link.textContent.trim());
+        link.href = "?" + params.toString();
     });
-}
-</script>
-<script>
-function showToast(text = "Скопировано ✓") {
-    const toast = document.getElementById("toast");
-    if (!toast) return;
 
-    toast.textContent = text;
-    toast.classList.add("show");
-
-    clearTimeout(toast._timer);
-
-    toast._timer = setTimeout(() => {
-        toast.classList.remove("show");
-    }, 1200);
-}
-</script>
-<script>
-let pressTimer = null;
-
-document.addEventListener("touchstart", (e) => {
-    const el = e.target.closest(".copyable");
-    if (!el) return;
-
-    pressTimer = setTimeout(() => {
-        const text = el.dataset.copy;
-        if (!text) return;
-
-        navigator.clipboard.writeText(text).then(() => {
-            showToast("Скопировано ✓");
-
-            el.style.opacity = "0.4";
-            setTimeout(() => {
-                el.style.opacity = "1";
-            }, 300);
-        });
-    }, 500);
-});
-
-document.addEventListener("touchend", () => {
-    clearTimeout(pressTimer);
-});
-
-document.addEventListener("touchmove", () => {
-    clearTimeout(pressTimer);
-});
-</script>
-
-<script>
-if (userInput) {
-    userInput.addEventListener("input", () => {
-        localStorage.setItem("user_name", userInput.value.trim());
-        updateModeLinks();
-        updatePreview();
+    document.querySelectorAll('.mode').forEach(link => {
+        if (link.textContent.includes("Моё")) params.set("mode", "mine");
+        link.href = "?" + params.toString();
     });
 }
 </script>
 
-<div id="toast">
-    Скопировано ✓
-</div>
+<div id="toast">Действие выполнено</div>
 </body>
 </html>
