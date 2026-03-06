@@ -271,7 +271,40 @@ function updateAllLinks() {
     });
 }
 </script>
-
 <div id="toast">Действие выполнено</div>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const searchInput = document.getElementById("search");
+    if (!searchInput) return;
+
+    function filterItems() {
+        const query = searchInput.value.trim().toLowerCase();
+        const items = document.querySelectorAll(".item");
+
+        items.forEach(item => {
+            const nameElement = item.querySelector(".name");
+            if (!nameElement) return;
+
+            const name = nameElement.textContent.trim().toLowerCase();
+            const matches = name.includes(query);
+
+            item.style.display = matches ? "block" : "none";
+        });
+    }
+
+    // Сразу фильтруем при загрузке (если в URL есть поиск)
+    filterItems();
+
+    // Фильтрация при каждом вводе символа
+    searchInput.addEventListener("input", filterItems);
+
+    // Дополнительно: Enter → ничего не делать, просто фильтровать
+    searchInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault(); // не отправляем форму
+        }
+    });
+});
+</script>
 </body>
 </html>
