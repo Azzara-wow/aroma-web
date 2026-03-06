@@ -18,8 +18,8 @@ async def health(request: Request):
 # === НАСТРОЙКИ ===
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1QHfj-JTCVs7xvnUj0bQZu6HNHuuDflWgSt6mC9ngMmU/edit?gid=0#gid=0"
 
-ORDER_TAGS = "#парфюм3"
-REORDER_TAGS = "#парфюм3 #добор"
+ORDER_TAGS = "#март"
+REORDER_TAGS = "#март #добор"
 
 
 def make_csv_url(sheet_url: str) -> str:
