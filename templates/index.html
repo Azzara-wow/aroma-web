@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body {font-family: system-ui, -apple-system, sans-serif; margin:0; padding:12px; background:#0e1117; color:#fff;}
-        .tabs, .modes {display:flex; gap:6px; margin-bottom:12px; overflow-x:auto; padding-bottom:8px;}
-        .tab, .mode {padding:8px 16px; border-radius:6px; background:#1a1d23; color:white; font-size:14px; white-space:nowrap; opacity:0.7;}
+        .tabs, .modes {display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; padding-bottom:8px;}
+        .tab, .mode {padding:8px 16px; border-radius:6px; background:#1a1d23; color:white; font-size:14px; white-space:nowrap; opacity:0.7; text-align:center; flex:1 1 auto; min-width:70px;}
         .tab.active, .mode.active {opacity:1; background:#2a2f38;}
         .item {padding:12px 8px; border-bottom:1px solid #2a2d34; cursor:pointer;}
         .name {font-size:16px; line-height:1.3;}
@@ -20,10 +20,12 @@
         .planned {background:rgba(120,180,120,0.18) !important;}
         .details {margin-top:10px; display:none;}
         .prices {margin:8px 0; font-size:14px;}
-        .status {font-size:13px; opacity:0.85; margin:8px 0;}
-        .generate-btn {width:100%; padding:12px; border-radius:6px; border:none; background:#2a2f38; color:white; font-size:15px; margin:10px 0; opacity:0.6; transition:opacity 0.2s;}
-        .generate-btn.active {background:#2f6f3e; opacity:1;}
-        #result {width:100%; background:#1a1d23; color:white; border-radius:6px; padding:8px; display:none; margin-top:8px;}
+        .status {font-size:13px; opacity:0.85; margin:8px 0; line-height:1.5;}
+        #result {width:100%; background:#1a1d23; color:white; border-radius:6px; padding:10px; margin-top:8px; display:none;}
+        #actions {display:flex; gap:8px; margin:12px 0;}
+        button {padding:12px; border-radius:6px; border:none; font-size:15px; cursor:pointer;}
+        #copy-btn {flex:1; background:#2f6f3e; color:white;}
+        #clear-btn {flex:1; background:#1a1d23; color:#ffb4b4;}
         #toast {position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:rgba(40,40,40,0.95); color:white; padding:10px 16px; border-radius:20px; opacity:0; transition:all 0.25s; z-index:9999;}
         #toast.show {opacity:1; transform:translateX(-50%) translateY(-6px);}
     </style>
@@ -31,99 +33,103 @@
 <body>
 
 <form method="get" style="margin-bottom:12px;">
-    <input type="text" name="user" placeholder="Имя (как в файле)" value="{{ user_name }}" style="width:100%; padding:10px; font-size:16px; border-radius:6px; border:none;">
+    <input type="hidden" name="mode" value="{{ mode }}">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    <input type="text" name="user" id="user-input" list="user-list"
+           placeholder="Имя или фамилия (как в таблице)"
+           value="{{ user_name }}"
+           style="width:100%; padding:10px; font-size:16px; border-radius:6px; border:none;"
+           autocomplete="off">
+    <datalist id="user-list">
+        {% for user in all_users %}<option value="{{ user }}">{% endfor %}
+    </datalist>
 </form>
 
 <div class="tabs">
     {% for t in tabs %}
-    <a href="?tab={{ t }}&user={{ user_name }}" class="tab {% if tab == t %}active{% endif %}">{{ t }}</a>
+    <a href="?tab={{ t }}&mode=category&user={{ user_name | urlencode }}" class="tab {% if mode != 'mine' and tab == t %}active{% endif %}">{{ t }}</a>
     {% endfor %}
 </div>
 
 <div class="modes">
-    <a href="?mode=mine&user={{ user_name }}" class="mode {% if mode == 'mine' %}active{% endif %}">Моё</a>
+    <a href="?mode=mine&user={{ user_name | urlencode }}" class="mode {% if mode == 'mine' %}active{% endif %}">Моё</a>
 </div>
 
-<input type="text" id="search" placeholder="Поиск по названию" style="width:100%; padding:8px; margin-bottom:10px; font-size:16px; border-radius:6px; border:none;">
+<input type="text" id="search" placeholder="Поиск по названию" style="width:100%; padding:8px; margin-bottom:12px; font-size:16px; border-radius:6px; border:none;">
 
-<button type="button" class="generate-btn" onclick="generateMessage()">Сформировать сообщение</button>
-<textarea id="result" rows="6" readonly style="width:100%; display:none;"></textarea>
-
-<div id="actions" style="display:flex; gap:8px; margin-top:6px;">
-    <button id="copy-btn" onclick="copyMessage()" style="flex:1; padding:8px; border-radius:6px; border:none; background:#1a1d23; color:white;">Скопировать</button>
-    <button id="clear-btn" onclick="clearPlanned()" style="flex:1; padding:8px; border-radius:6px; border:none; background:#1a1d23; color:#ffb4b4;">Очистить выбор</button>
+<div id="actions">
+    <button id="copy-btn" onclick="copyMessage()">Скопировать сообщение</button>
+    <button id="clear-btn" onclick="clearPlanned()">Очистить выбор</button>
 </div>
 
-<h2>
-    {% if mode == 'mine' %}Мои заказы
-    {% else %}{{ tab if tab else "Все ароматы" }}{% endif %}
-</h2>
+<textarea id="result" rows="6" readonly></textarea>
+
+<h2>{% if mode == 'mine' %}Мои заказы{% elif tab == 'Общее' %}Все ароматы{% else %}{{ tab }}{% endif %}</h2>
 
 {% for aroma in aromas %}
 <div class="item {% if aroma.ordered_ml > 0 %}mine{% endif %}" onclick="toggle(this)">
     <div class="row">
         <div>
             <div class="name copyable" data-copy="{{ aroma.aroma_name }}">{{ aroma.aroma_name }}</div>
+
             {% if aroma.category == 'Духи' and aroma.view %}
                 <div class="meta">Пол: {{ aroma.view }}</div>
             {% endif %}
         </div>
+
         <div class="right">
-            {% if aroma.collected > 0 %}
-                <span class="owned">Набрано: {{ aroma.collected }}</span>
-            {% endif %}
+            {% if aroma.collected > 0 %}<span class="owned">Набрано: {{ aroma.collected }}</span>{% endif %}
             <span class="price">{{ aroma.price }} ₽</span>
         </div>
     </div>
 
     <div class="details">
-{% if aroma.category == 'Духи' %}
-    {% if aroma.aroma_name != 'Thomas Kosmala No.12 Oud Douze' %}
-        <a href="https://www.google.com/search?q=site:fragrantica.ru {{ aroma.aroma_name | urlencode }}"
-           target="_blank" style="font-size:14px; color:#8ab4f7; display:block; margin:8px 0;"
-           onclick="event.stopPropagation()">🔍 Поиск на Fragrantica.ru</a>
-    {% else %}
-        <!-- Для этого аромата ссылку не показываем, можно оставить пустое место или текст -->
-        <div style="font-size:13px; opacity:0.7; margin:8px 0;">
-            Нет на Fragrantica (информация в чате закупки)
+
+        <div class="prices">
+            {% for p in aroma.prices %}
+                <div><strong>{{ p.label }}:</strong> {{ p.value }} ₽</div>
+            {% endfor %}
         </div>
-    {% endif %}
 
-
-            <div class="status" style="margin:10px 0; line-height:1.5;">
-                <div>Набрано: <strong>{{ aroma.collected }} мл</strong></div>
-                <div>Осталось набрать: <strong>{{ aroma.remaining }} мл</strong></div>
-                {% if aroma.ordered_ml > 0 %}
-                    <div>Ты заказала: <strong>{{ aroma.ordered_ml }} мл</strong></div>
-                {% endif %}
-            </div>
-
-            <input type="text" placeholder="Заказать (мл)" class="amount-input"
-                   data-name="{{ aroma.aroma_name }}"
-                   style="width:100%; padding:10px; font-size:16px; border-radius:6px; border:none; margin-top:8px;"
-                   onclick="event.stopPropagation()">
+        {% if aroma.category == 'Духи' %}
+            {% if aroma.aroma_name != 'Thomas Kosmala No.12 Oud Douze' %}
+                <a href="https://www.google.com/search?q=site:fragrantica.ru {{ aroma.aroma_name | urlencode }}"
+                   target="_blank"
+                   style="font-size:14px; color:#8ab4f7; display:block; margin:8px 0;"
+                   onclick="event.stopPropagation()">🔍 Поиск на Fragrantica.ru</a>
+            {% else %}
+                <div style="font-size:13px; opacity:0.7; margin:8px 0;">
+                    Нет на Fragrantica (информация в чате закупки)
+                </div>
+            {% endif %}
         {% else %}
-            {% if aroma.view %}<div style="opacity:0.8;">Вид: {{ aroma.view }}</div>{% endif %}
-            <div class="prices">
-                {% for p in aroma.prices %}
-                    <div>{{ p.label }}: <strong>{{ p.value }}</strong> ₽</div>
-                {% endfor %}
-            </div>
-            <div class="status">
-                Набрано: <strong>{{ aroma.collected }}</strong> 
-                Осталось: <strong>{{ aroma.remaining }}</strong>
-            </div>
-            <input type="text" placeholder="Сколько взять" class="amount-input"
-                   data-name="{{ aroma.aroma_name }}"
-                   style="width:100%; padding:10px; font-size:16px; border-radius:6px; border:none; margin-top:8px;"
-                   onclick="event.stopPropagation()">
+            {% if aroma.view %}
+                <div style="font-size:14px; opacity:0.85; margin:8px 0;">
+                    {{ aroma.view }}
+                </div>
+            {% endif %}
         {% endif %}
+
+        <div class="status">
+            Набрано: <strong>{{ aroma.collected }}</strong> 
+            Осталось: <strong>{{ aroma.remaining }}</strong><br>
+            {% if aroma.ordered_ml > 0 %}
+                <strong style="color:#8ab4f7;">Ты взяла: {{ aroma.ordered_ml }} мл</strong>
+            {% endif %}
+        </div>
+
+        <input type="text"
+               placeholder="{% if aroma.category in ['Духи', 'Отдушки'] %}Заказать (мл){% else %}Сколько взять{% endif %}"
+               class="amount-input"
+               data-name="{{ aroma.aroma_name }}"
+               style="width:100%; padding:10px; font-size:16px; border-radius:6px; border:none; margin-top:8px;"
+               onclick="event.stopPropagation()">
     </div>
 </div>
 {% endfor %}
 
+<!-- === СТАРЫЕ РАБОЧИЕ СКРИПТЫ (полностью восстановлены) === -->
 <script>
-// ==================== ОСНОВНЫЕ ФУНКЦИИ ====================
 function toggle(item) {
     const details = item.querySelector(".details");
     details.style.display = details.style.display === "block" ? "none" : "block";
@@ -190,7 +196,7 @@ function buildMessageText() {
 
 function updateGenerateButtonState() {
     const hasPlanned = Object.keys(localStorage).some(k => k.startsWith("planned_") && localStorage.getItem(k)?.trim());
-    document.querySelector(".generate-btn").classList.toggle("active", hasPlanned);
+    document.querySelector(".generate-btn")?.classList.toggle("active", hasPlanned);
 }
 
 function updatePreview() {
@@ -211,7 +217,6 @@ function showToast(text) {
     setTimeout(() => toast.classList.remove("show"), 1800);
 }
 
-// ==================== ВОССТАНОВЛЕНИЕ СОСТОЯНИЯ ====================
 document.addEventListener("DOMContentLoaded", () => {
     const userInput = document.querySelector('input[name="user"]');
     if (userInput) {
@@ -223,7 +228,6 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Восстановление выбранных товаров
     document.querySelectorAll(".amount-input").forEach(input => {
         const name = input.dataset.name;
         const saved = localStorage.getItem("planned_" + name);
@@ -232,7 +236,6 @@ document.addEventListener("DOMContentLoaded", () => {
             input.closest(".item")?.classList.add("planned");
         }
 
-        // Live-подсветка и сохранение при вводе
         input.addEventListener("input", () => {
             const val = input.value.trim();
             const item = input.closest(".item");
@@ -248,7 +251,6 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    // Дополнительная проверка подсветки по имени (на всякий случай)
     document.querySelectorAll(".item").forEach(item => {
         const nameEl = item.querySelector(".name");
         if (!nameEl) return;
@@ -279,7 +281,9 @@ function updateAllLinks() {
     });
 }
 </script>
+
 <div id="toast">Действие выполнено</div>
+
 <script>
 document.addEventListener("DOMContentLoaded", () => {
     const searchInput = document.getElementById("search");
@@ -300,19 +304,14 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Сразу фильтруем при загрузке (если в URL есть поиск)
     filterItems();
-
-    // Фильтрация при каждом вводе символа
     searchInput.addEventListener("input", filterItems);
 
-    // Дополнительно: Enter → ничего не делать, просто фильтровать
     searchInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-            e.preventDefault(); // не отправляем форму
-        }
+        if (e.key === "Enter") e.preventDefault();
     });
 });
 </script>
+
 </body>
 </html>
