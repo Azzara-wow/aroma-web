@@ -18,10 +18,7 @@ REORDER_TAGS = "#luzi03 #добор"
 @app.get("/health")
 @app.head("/health")
 async def health(request: Request):
-    return {
-        "status": "ok",
-        "service": "alive"
-    }
+    return {"status": "ok"}
 
 def make_csv_url(sheet_url: str) -> str:
     parsed = urlparse(sheet_url)
@@ -206,7 +203,3 @@ async def index(request: Request):
         traceback.print_exc()
         return HTMLResponse(content=f"<h2>Ошибка загрузки данных</h2><pre>{traceback.format_exc()}</pre>", status_code=500)
 
-@app.get("/health")
-@app.head("/health")
-async def health(request: Request):
-    return {"status": "ok"}
