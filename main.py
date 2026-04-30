@@ -58,7 +58,7 @@ def prepare_dataframe(df: pd.DataFrame, user_name: str) -> pd.DataFrame:
     user_col = user_col if user_col in df.columns else None
 
     # === ФИКСИРОВАННЫЕ ЦЕНОВЫЕ СТОЛБЦЫ ===
-    price_cols = ["цена 10 мл", "цена 50 мл", "цена 100 мл", "цена 500 мл"]
+    price_cols = ["цена 50 мл", "цена 100 мл", "цена 500 мл"]
 
     # === ФОРМИРОВАНИЕ РЕЗУЛЬТАТА ===
     result = pd.DataFrame()
