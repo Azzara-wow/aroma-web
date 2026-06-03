@@ -10,10 +10,10 @@ app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
 # === НАСТРОЙКИ ===
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1iIuMYQyZ3EqA1IqBf2HHvXIriNlm3jNsWWQYGhQm0xo/edit?gid=0#gid=0"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1JyJFjuOxF4LQystAQr_4Pnak8oW-0rlNXkwbAwCoaTo/edit?gid=0#gid=0"
 
-ORDER_TAGS = "#may01"
-REORDER_TAGS = "#may01 #добор"
+ORDER_TAGS = "#luzi06"
+REORDER_TAGS = "#luzi06 #добор"
 
 @app.get("/health")
 @app.head("/health")
