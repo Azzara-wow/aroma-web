@@ -6,9 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body {font-family: system-ui, -apple-system, sans-serif; margin:0; padding:12px; background:#0e1117; color:#fff;}
-        .topbar {display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; font-size:14px;}
+        .topbar {display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; font-size:14px; gap:10px;}
         .topbar .who {opacity:0.85;}
         .topbar a {color:#8ab4f7; text-decoration:none;}
+        .login-cta {display:block; text-align:center; padding:10px 12px; margin-bottom:12px; background:#1a2740; color:#8ab4f7; border-radius:8px; text-decoration:none; font-size:14px;}
         .tabs, .modes {display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;}
         .tab, .mode {padding:8px 16px; border-radius:6px; background:#1a1d23; color:white; font-size:14px; white-space:nowrap; opacity:0.7; text-align:center; flex:1 1 auto; min-width:70px; border:none; cursor:pointer;}
         .tab.active, .mode.active {opacity:1; background:#2a2f38;}
@@ -25,11 +26,9 @@
         .details {margin-top:10px; display:none;}
         .prices {margin:8px 0; font-size:14px;}
         .status {font-size:13px; opacity:0.85; margin:8px 0; line-height:1.5;}
-        /* окошко предпросмотра заказа */
         #preview {position:sticky; top:0; z-index:20; background:#14171d; border:1px solid #2a2f38; border-radius:10px; padding:12px; margin-bottom:12px; display:none;}
         #preview .pv-title {font-size:14px; opacity:0.8; margin-bottom:8px;}
         #pv-list {font-size:14px; line-height:1.6; max-height:180px; overflow-y:auto;}
-        #pv-list .rm {color:#ffb4b4;}
         .pv-buttons {display:flex; gap:8px; margin-top:10px;}
         button {padding:12px; border-radius:6px; border:none; font-size:15px; cursor:pointer;}
         #send-btn {flex:2; background:#2f6f3e; color:white;}
@@ -41,12 +40,21 @@
 <body>
 
 <div class="topbar">
-    <span class="who">Вы вошли как <strong>{{ user_name }}</strong></span>
-    <a href="/logout">Выйти</a>
+    {% if is_auth %}
+        <span class="who">Вы вошли как <strong>{{ user_name }}</strong></span>
+        <a href="/logout">Выйти</a>
+    {% else %}
+        <span class="who">Просмотр ассортимента</span>
+        <a href="/login">Войти</a>
+    {% endif %}
 </div>
 
 {% if is_admin %}
 <a href="/admin" style="display:block; text-align:center; padding:12px; margin-bottom:12px; background:#3a2f5f; color:#fff; border-radius:8px; text-decoration:none; font-weight:600;">🔑 Организаторская</a>
+{% endif %}
+
+{% if not is_auth %}
+<a class="login-cta" href="/login">Чтобы заказать и видеть «Моё» — войдите</a>
 {% endif %}
 
 <div class="tabs" id="tabs">
@@ -55,21 +63,24 @@
     {% endfor %}
 </div>
 
+{% if is_auth %}
 <div class="modes">
     <button class="mode" data-mode="mine">Моё</button>
 </div>
+{% endif %}
 
 <input type="text" id="search" placeholder="Поиск по названию" style="width:100%; padding:8px; margin-bottom:12px; font-size:16px; border-radius:6px; border:none;">
 
-<!-- Окошко предпросмотра: что уйдёт в заказ -->
+{% if is_auth %}
 <div id="preview">
-    <div class="pv-title">Заказ к отправке:</div>
+    <div class="pv-title">Добавить в заказ:</div>
     <div id="pv-list"></div>
     <div class="pv-buttons">
         <button id="send-btn" onclick="sendOrder()">Создать заказ</button>
         <button id="reset-btn" onclick="resetInputs()">Очистить</button>
     </div>
 </div>
+{% endif %}
 
 <h2 id="heading">Все ароматы</h2>
 
@@ -127,14 +138,14 @@
             </strong>
         </div>
 
-        <input type="number" min="0" inputmode="numeric"
-               placeholder="{% if aroma.category in ['Духи', 'Отдушки'] %}Сколько мл{% else %}Сколько взять{% endif %}"
+        {% if is_auth %}
+        <input type="text" inputmode="numeric" pattern="[0-9]*"
+               placeholder="{% if aroma.category in ['Духи', 'Отдушки'] %}Добавить, мл{% else %}Добавить, шт{% endif %}"
                class="amount-input"
                data-name="{{ aroma.aroma_name }}"
-               data-current="{{ aroma.ordered_ml }}"
-               value="{% if aroma.ordered_ml > 0 %}{{ aroma.ordered_ml }}{% endif %}"
                style="width:100%; padding:10px; font-size:16px; border-radius:6px; border:none; margin-top:8px;"
                onclick="event.stopPropagation()">
+        {% endif %}
     </div>
 </div>
 {% endfor %}
@@ -158,13 +169,13 @@ function showToast(text) {
 }
 
 function intVal(inp) {
-    const v = (inp.value || "").trim();
+    const v = (inp.value || "").replace(/[^\d]/g, "");
     if (v === "") return 0;
     const n = parseInt(v, 10);
     return (isNaN(n) || n < 0) ? 0 : n;
 }
 
-// ---- фильтрация вкладок/режима/поиска (всё в браузере, без сервера) ----
+// ---- фильтрация вкладок/режима/поиска (всё в браузере) ----
 function applyView() {
     const q = (document.getElementById("search").value || "").trim().toLowerCase();
     document.querySelectorAll(".item").forEach(item => {
@@ -186,7 +197,6 @@ function applyView() {
         if (q) visible = visible && name.includes(q);
         item.style.display = visible ? "block" : "none";
 
-        // какие бейджи показывать: в «Моё» — Ты взяла, иначе — Набрано
         const bMine = item.querySelector(".b-mine");
         const bColl = item.querySelector(".b-collected");
         if (bMine && bColl) {
@@ -199,88 +209,71 @@ function applyView() {
         (curMode === "mine") ? "Мои заказы"
         : (curTab === "Общее") ? "Все ароматы" : curTab;
 
-    // подсветка активных кнопок
     document.querySelectorAll(".tab").forEach(b =>
         b.classList.toggle("active", curMode !== "mine" && b.dataset.tab === curTab));
     document.querySelectorAll(".mode").forEach(b =>
         b.classList.toggle("active", curMode === "mine"));
 }
 
-// ---- предпросмотр заказа (что отличается от текущего) ----
+// ---- предпросмотр: что добавляем ----
 function pendingItems() {
     const out = [];
     document.querySelectorAll(".amount-input").forEach(inp => {
-        const cur = parseInt(inp.dataset.current || "0", 10) || 0;
-        const want = intVal(inp);
-        if (want !== cur) out.push({name: inp.dataset.name, cur, want});
+        const add = intVal(inp);
+        if (add > 0) out.push({name: inp.dataset.name, add});
     });
     return out;
 }
 
 function refreshPreview() {
-    const items = pendingItems();
     const box = document.getElementById("preview");
-    const list = document.getElementById("pv-list");
-
-    // подсветка изменённых карточек
+    if (!box) return;
+    const items = pendingItems();
     const changed = new Set(items.map(i => i.name));
     document.querySelectorAll(".item").forEach(item =>
         item.classList.toggle("planned", changed.has(item.dataset.name)));
 
-    if (items.length === 0) {
-        box.style.display = "none";
-        return;
-    }
-    list.innerHTML = items.map(i =>
-        i.want === 0
-            ? `<div class="rm">${i.name} — убрать (было ${i.cur})</div>`
-            : `<div>${i.name} — <strong>${i.want}</strong> мл${i.cur ? ` (было ${i.cur})` : ""}</div>`
-    ).join("");
+    if (items.length === 0) { box.style.display = "none"; return; }
+    document.getElementById("pv-list").innerHTML = items.map(i =>
+        `<div>${i.name} — <strong>+${i.add}</strong> мл</div>`).join("");
     box.style.display = "block";
 }
 
 function resetInputs() {
-    document.querySelectorAll(".amount-input").forEach(inp => {
-        const cur = parseInt(inp.dataset.current || "0", 10) || 0;
-        inp.value = cur > 0 ? cur : "";
-    });
+    document.querySelectorAll(".amount-input").forEach(inp => { inp.value = ""; });
     refreshPreview();
     showToast("Очищено");
 }
 
-// применить ответ сервера без перезагрузки страницы
+function cssEsc(s) { return (window.CSS && CSS.escape) ? CSS.escape(s) : s.replace(/"/g, '\\"'); }
+
+// применить ответ сервера без перезагрузки
 function applyChanges(changes) {
     changes.forEach(ch => {
-        const to = ch.to, from = ch.from, delta = to - from;
+        const to = ch.to, added = ch.added;
         document.querySelectorAll(`.amount-input[data-name="${cssEsc(ch.aroma)}"]`).forEach(inp => {
-            inp.dataset.current = to;
-            inp.value = to > 0 ? to : "";
+            inp.value = "";
         });
         document.querySelectorAll(`.item[data-name="${cssEsc(ch.aroma)}"]`).forEach(item => {
             item.dataset.ordered = to;
             item.classList.toggle("mine", to > 0);
-            // «Ты взяла»
             item.querySelectorAll(".v-mine").forEach(el => el.textContent = to);
             const sMine = item.querySelector(".s-mine");
             if (sMine) sMine.style.display = to > 0 ? "" : "none";
-            // «Набрано» += дельта
             const bColl = item.querySelector(".b-collected");
             if (bColl) {
                 const m = bColl.textContent.match(/-?\d+/);
-                const val = (m ? parseInt(m[0], 10) : 0) + delta;
-                bColl.textContent = "Набрано: " + val;
+                bColl.textContent = "Набрано: " + ((m ? parseInt(m[0], 10) : 0) + added);
             }
         });
     });
 }
 
-function cssEsc(s) { return (window.CSS && CSS.escape) ? CSS.escape(s) : s.replace(/"/g, '\\"'); }
-
 function sendOrder() {
     const pending = pendingItems();
-    if (pending.length === 0) { showToast("Нет изменений"); return; }
+    if (pending.length === 0) { showToast("Ничего не добавлено"); return; }
     const items = {};
-    pending.forEach(i => { items[i.name] = i.want; });
+    pending.forEach(i => { items[i.name] = i.add; });
 
     const btn = document.getElementById("send-btn");
     btn.disabled = true;

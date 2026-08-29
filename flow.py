@@ -234,17 +234,16 @@ def pair_and_collected(phone_raw, aroma):
     return {"buyer_qty": int(pair), "collected": int(total)}
 
 
-def apply_desired(phone_raw, name, desired: dict):
+def add_batch(phone_raw, name, additions: dict):
     """
-    Привести заказ покупателя к ЖЕЛАЕМЫМ остаткам одним заходом (для витрины).
+    ДОБАВИТЬ объёмы к заказу покупателя одним заходом (для витрины).
+    Витрина умеет только ПРИБАВЛЯТЬ — уменьшение делает организатор в админке.
 
-    desired: {аромат: желаемый_остаток_мл}. Для каждого аромата считаем дельту
-    (желаемое минус текущее) и, если она не ноль, пишем строку плюс/минус.
-    Ароматов, которых нет в desired, не касаемся. desired=0 -> убрать позицию.
+    additions: {аромат: сколько_добавить_мл (>0)}. На каждый положительный аромат
+    пишем строку 'плюс'. Ноль/отрицательные игнорируем.
 
-    Тег всей пачки: 'основной', если покупателя ещё не было в Потоке; иначе 'добор'
-    (одна отправка формы = одно «событие заказа»).
-    Возвращает {"ok": True, "changes": [{"aroma","from","to"}...]} либо reason.
+    Тег всей пачки: 'основной', если покупателя ещё не было в Потоке; иначе 'добор'.
+    Возвращает {"ok": True, "changes": [{"aroma","added","to"}...]} либо reason.
     """
     phone = users.normalize_phone(phone_raw)
     if not users.valid_phone(phone):
@@ -257,20 +256,14 @@ def apply_desired(phone_raw, name, desired: dict):
 
     rows_to_add = []
     changes = []
-    for aroma, want in (desired or {}).items():
+    for aroma, add in (additions or {}).items():
         aroma = core.norm(aroma)
-        if aroma == "":
+        add = int(core.to_num(add))
+        if aroma == "" or add <= 0:
             continue
-        want = int(core.to_num(want))
-        if want < 0:
-            want = 0
         cur = int(_net_pair(values, phone, aroma))
-        delta = want - cur
-        if delta == 0:
-            continue
-        direction = DIR_PLUS if delta > 0 else DIR_MINUS
-        rows_to_add.append([stamp, phone, (name or "").strip(), aroma, abs(delta), direction, tag])
-        changes.append({"aroma": aroma, "from": cur, "to": want})
+        rows_to_add.append([stamp, phone, (name or "").strip(), aroma, add, DIR_PLUS, tag])
+        changes.append({"aroma": aroma, "added": add, "to": cur + add})
 
     if rows_to_add:
         ws.append_rows(rows_to_add, value_input_option="RAW")

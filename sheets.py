@@ -46,11 +46,44 @@ def _find_key_path() -> str:
     )
 
 
+def _install_retries(client):
+    """
+    Автоповтор на обрывах/временных ошибках Google (частая беда канала из РФ:
+    'Remote end closed connection without response' на переиспользованном
+    keep-alive соединении). Повторяем ТОЛЬКО идемпотентные методы:
+      GET  — чтение листов,
+      PUT  — правка ячейки (update_acell: ставит значение, повтор безопасен).
+    POST (append_row/append_rows — добавление заказа) НЕ повторяем: при обрыве
+    неизвестно, применился ли он, и повтор мог бы задвоить строку.
+    Плюс общий таймаут, чтобы зависший запрос не висел бесконечно.
+    """
+    try:
+        from requests.adapters import HTTPAdapter
+        from urllib3.util.retry import Retry
+        retry = Retry(
+            total=4, connect=4, read=4, backoff_factor=0.6,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=frozenset(["GET", "PUT", "HEAD", "OPTIONS", "DELETE"]),
+            raise_on_status=False,
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+        session = client.http_client.session
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+    except Exception:
+        pass  # ретраи — улучшение, не критично
+    try:
+        client.set_timeout(20)  # секунд на запрос
+    except Exception:
+        pass
+
+
 def _get_client():
     global _client
     if _client is None:
         creds = Credentials.from_service_account_file(_find_key_path(), scopes=SCOPES)
         _client = gspread.authorize(creds)
+        _install_retries(_client)
     return _client
 
 
