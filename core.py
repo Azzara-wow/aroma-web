@@ -74,19 +74,53 @@ SHOWCASE_LABELS = {
 
 # ---------- утилиты чтения ----------
 
-def make_csv_url(sheet_url: str) -> str:
+def _gid_from_url(sheet_url: str):
+    """Номер листа (gid) из ссылки. Ищем и в ?gid=, и в #gid=. None если нет."""
     parsed = urlparse(sheet_url)
-    path_parts = parsed.path.split("/")
-    spreadsheet_id = path_parts[path_parts.index("d") + 1]
     query = parse_qs(parsed.query)
-    gid = query.get("gid", ["0"])[0]
-    return f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}"
+    gid = query.get("gid", [None])[0]
+    if gid is None and parsed.fragment.startswith("gid="):
+        gid = parsed.fragment.split("=", 1)[1]
+    return int(gid) if gid is not None and str(gid).isdigit() else None
+
+
+import time
+
+# Короткий кэш Ассортимента: он меняется редко, а витрина дёргает его часто.
+LOAD_TTL_SECONDS = 60
+_data_cache = {"df": None, "ts": 0.0}
 
 
 def load_data(sheet_url: str = None) -> pd.DataFrame:
+    """
+    Ассортимент через сервисный аккаунт (книга на Шаге 3 приватная — публичного
+    CSV больше нет). Возвращаем DataFrame БЕЗ шапки (header=None по духу): строки
+    и столбцы читаются по позициям, ровно как раньше из CSV.
+    Лист выбираем по gid из SHEET_URL; если gid нет — первый лист книги.
+    Результат кэшируется на LOAD_TTL_SECONDS (только для основного SHEET_URL).
+    """
+    import sheets  # локальный импорт: sheets импортирует core, разрываем цикл
+
     url = sheet_url or SHEET_URL
-    # header=None: читаем по позициям, не по названиям шапки.
-    return pd.read_csv(make_csv_url(url), engine="python", header=None, dtype=str)
+    now = time.time()
+    if url == SHEET_URL and _data_cache["df"] is not None \
+            and now - _data_cache["ts"] < LOAD_TTL_SECONDS:
+        return _data_cache["df"]
+
+    gid = _gid_from_url(url)
+    ws = sheets.worksheet_by_gid(gid) if gid is not None else sheets.open_book().sheet1
+
+    values = ws.get_all_values()  # список строк, все клетки — строки
+    # Выравниваем строки по ширине самой длинной (get_all_values иногда даёт
+    # рваные строки), чтобы DataFrame был прямоугольным.
+    width = max((len(r) for r in values), default=0)
+    values = [r + [""] * (width - len(r)) for r in values]
+    df = pd.DataFrame(values, dtype=str)
+
+    if url == SHEET_URL:
+        _data_cache["df"] = df
+        _data_cache["ts"] = now
+    return df
 
 
 def norm(value) -> str:

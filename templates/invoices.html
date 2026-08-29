@@ -29,11 +29,11 @@
 <body>
 
 <div class="nav">
-    <a href="/" class="keep-user" data-base="/">← витрина</a>
+    <a href="/">← витрина</a>
 </div>
 <div style="display:flex; gap:8px; margin-bottom:16px;">
-    <a href="/admin" class="keep-user" data-base="/admin" style="flex:1; text-align:center; padding:10px; border-radius:8px; text-decoration:none; background:#1a1d23; color:#8ab4f7;">Ввод заказов</a>
-    <a href="/admin/invoices" class="keep-user" data-base="/admin/invoices" style="flex:1; text-align:center; padding:10px; border-radius:8px; text-decoration:none; background:#2a2f38; color:#fff; font-weight:600;">Счета</a>
+    <a href="/admin" style="flex:1; text-align:center; padding:10px; border-radius:8px; text-decoration:none; background:#1a1d23; color:#8ab4f7;">Ввод заказов</a>
+    <a href="/admin/invoices" style="flex:1; text-align:center; padding:10px; border-radius:8px; text-decoration:none; background:#2a2f38; color:#fff; font-weight:600;">Счета</a>
 </div>
 <h1>Счета закупки</h1>
 
@@ -95,16 +95,6 @@
 {% endif %}
 
 <script>
-// Тащим секретное слово из localStorage во все ссылки организаторской.
-(function keepUserLinks(){
-    const user = (localStorage.getItem("user_name") || "").trim();
-    if (!user) return;
-    document.querySelectorAll("a.keep-user").forEach(a => {
-        const base = a.dataset.base || "/";
-        a.href = base + "?user=" + encodeURIComponent(user);
-    });
-})();
-
 // Фильтр детальных счетов по фамилии
 const filter = document.getElementById('filter');
 if (filter) {

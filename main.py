@@ -1,84 +1,77 @@
-# main.py — aroma_web.v3.1 (морда покупателя)
-# Вся логика чтения файла вынесена в core.py. Здесь — только веб-слой витрины.
+# main.py — aroma_web.v3.3 (морда покупателя, Шаг 3)
+# Личность — из куки (auth.current_user), не из URL. Данные заказов — из Потока
+# (flow), а не из матрицы. Заказ уходит прямо в Поток (POST /order), без ТГ.
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 import traceback
 
-import os
 import core
 import admin
+import auth
+import users
+import flow
 
 app = FastAPI()
 app.include_router(admin.router)
+app.include_router(auth.router)
 templates = Jinja2Templates(directory="templates")
 
-# Секретное слово для входа в организаторскую (из окружения, не в коде).
-# Если не задано — дверь не показывается никогда.
-ADMIN_NAME = os.environ.get("ADMIN_NAME", "").strip()
 
-# Теги сообщения покупателя — специфика морды, админке не нужны.
-ORDER_TAGS = "#luzi07"
-REORDER_TAGS = "#luzi07 #добор"
+# Обработчики намеренно СИНХРОННЫЕ (def, не async): внутри — блокирующие вызовы
+# gspread. FastAPI гоняет sync-обработчики в пуле потоков, поэтому медленный момент
+# Google у одного покупателя не подвешивает остальных (важно на одном воркере Render).
 
 
 @app.get("/health")
 @app.head("/health")
-async def health(request: Request):
+def health(request: Request):
     return {"status": "ok"}
 
 
 @app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
-    user_name_raw = request.query_params.get("user", "").strip()
+def index(request: Request):
+    user = auth.current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+
     mode = request.query_params.get("mode", "category")
     tab = request.query_params.get("tab", "Общее")
 
     try:
         df_raw = core.load_data()
-        all_rows, buyer_names = core.prepare_dataframe(df_raw, user_name_raw)
+        all_rows, _ = core.prepare_dataframe(df_raw)  # покупателей матрицы больше нет
 
+        # Данные заказов из Потока — за ОДНО чтение (набрано всеми + моё).
+        collected, mine = flow.board(user["phone"])
+        for x in all_rows:
+            x["collected"] = collected.get(x["aroma_name"], 0)
+            x["ordered_ml"] = mine.get(x["aroma_name"], 0)
+            x["is_dobor"] = "добор" in x["status"]
+
+        # Отдаём ВЕСЬ видимый список; вкладки и «Моё» фильтрует браузер (быстро).
         visible = [x for x in all_rows if x["status"] not in ("hide", "сервис")]
 
         base_tabs = ["Общее", "Духи", "Отдушки", "База", "Разное", "Флаконы"]
         present = {x["category"] for x in all_rows}
         active_tabs = [t for t in base_tabs if t == "Общее" or t in present]
 
-        has_dobor = any("добор" in x["status"] for x in all_rows)
+        has_dobor = any(x["is_dobor"] for x in all_rows)
         if has_dobor:
             active_tabs.append("Добор")
-
-        if mode == "mine":
-            shown = [x for x in visible if x["ordered_ml"] > 0]
-            current_tab = "Моё"
-        else:
-            if tab == "Общее":
-                shown = [x for x in visible if "добор" not in x["status"]]
-            elif tab == "Добор":
-                shown = [x for x in visible if "добор" in x["status"]]
-            else:
-                shown = [x for x in visible if x["category"] == tab and "добор" not in x["status"]]
-            current_tab = tab if tab in active_tabs else "Общее"
-
-        is_reorder = any(x["ordered_ml"] > 0 for x in all_rows)
-        order_tag = REORDER_TAGS if is_reorder else ORDER_TAGS
-
-        # Дверь в организаторскую: видна, только если введено секретное слово.
-        show_admin_door = bool(ADMIN_NAME) and user_name_raw.strip().lower() == ADMIN_NAME.lower()
 
         return templates.TemplateResponse(
             "index.html",
             {
                 "request": request,
-                "aromas": shown,
-                "user_name": user_name_raw,
+                "aromas": visible,
+                "user_name": user["name"],
                 "mode": mode,
-                "tab": current_tab,
-                "order_tag": order_tag,
+                "tab": tab,
                 "tabs": active_tabs,
-                "all_users": sorted(set(buyer_names), key=str.lower),
-                "show_admin_door": show_admin_door,
+                "is_admin": users.is_admin(user),
             },
         )
 
@@ -88,3 +81,21 @@ async def index(request: Request):
             content=f"<h2>Ошибка загрузки данных</h2><pre>{traceback.format_exc()}</pre>",
             status_code=500,
         )
+
+
+class OrderIn(BaseModel):
+    items: dict = {}
+
+
+@app.post("/order")
+def order(request: Request, payload: OrderIn):
+    """
+    Принять желаемые остатки от витрины и записать дельты в Поток.
+    Тело: {"items": {"<аромат>": <мл>, ...}}. Личность — из куки.
+    """
+    user = auth.current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "reason": "not_authenticated"}, status_code=401)
+    res = flow.apply_desired(user["phone"], user["name"], payload.items or {})
+    status = 200 if res.get("ok") else 400
+    return JSONResponse(res, status_code=status)

@@ -6,89 +6,96 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body {font-family: system-ui, -apple-system, sans-serif; margin:0; padding:12px; background:#0e1117; color:#fff;}
-        .tabs, .modes {display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; padding-bottom:8px;}
-        .tab, .mode {padding:8px 16px; border-radius:6px; background:#1a1d23; color:white; font-size:14px; white-space:nowrap; opacity:0.7; text-align:center; flex:1 1 auto; min-width:70px;}
+        .topbar {display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; font-size:14px;}
+        .topbar .who {opacity:0.85;}
+        .topbar a {color:#8ab4f7; text-decoration:none;}
+        .tabs, .modes {display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;}
+        .tab, .mode {padding:8px 16px; border-radius:6px; background:#1a1d23; color:white; font-size:14px; white-space:nowrap; opacity:0.7; text-align:center; flex:1 1 auto; min-width:70px; border:none; cursor:pointer;}
         .tab.active, .mode.active {opacity:1; background:#2a2f38;}
         .item {padding:12px 8px; border-bottom:1px solid #2a2d34; cursor:pointer;}
         .name {font-size:16px; line-height:1.3;}
         .meta {font-size:13px; opacity:0.8; margin-top:2px;}
-        .price {font-size:14px; opacity:0.7; margin-left:12px;}
+        .price {font-size:14px; opacity:0.7; margin-left:8px;}
         .row {display:flex; justify-content:space-between; align-items:center;}
-        .right {display:flex; gap:8px; align-items:center;}
-        .owned {font-size:13px; opacity:0.8; background:#2a2f38; padding:2px 6px; border-radius:4px;}
+        .right {display:flex; gap:6px; align-items:center; flex-wrap:wrap; justify-content:flex-end;}
+        .badge {font-size:12px; opacity:0.85; background:#2a2f38; padding:2px 6px; border-radius:4px; white-space:nowrap;}
+        .b-mine {background:rgba(100,150,255,0.25);}
         .mine {background:rgba(100,150,255,0.08);}
-        .planned {background:rgba(120,180,120,0.18) !important;}
+        .planned {background:rgba(200,150,60,0.20) !important;}
         .details {margin-top:10px; display:none;}
         .prices {margin:8px 0; font-size:14px;}
         .status {font-size:13px; opacity:0.85; margin:8px 0; line-height:1.5;}
-        #result {width:100%; background:#1a1d23; color:white; border-radius:6px; padding:10px; margin-top:8px; display:none;}
-        #actions {display:flex; gap:8px; margin:12px 0;}
+        /* окошко предпросмотра заказа */
+        #preview {position:sticky; top:0; z-index:20; background:#14171d; border:1px solid #2a2f38; border-radius:10px; padding:12px; margin-bottom:12px; display:none;}
+        #preview .pv-title {font-size:14px; opacity:0.8; margin-bottom:8px;}
+        #pv-list {font-size:14px; line-height:1.6; max-height:180px; overflow-y:auto;}
+        #pv-list .rm {color:#ffb4b4;}
+        .pv-buttons {display:flex; gap:8px; margin-top:10px;}
         button {padding:12px; border-radius:6px; border:none; font-size:15px; cursor:pointer;}
-        #copy-btn {flex:1; background:#2f6f3e; color:white;}
-        #clear-btn {flex:1; background:#1a1d23; color:#ffb4b4;}
+        #send-btn {flex:2; background:#2f6f3e; color:white;}
+        #reset-btn {flex:1; background:#1a1d23; color:#ffb4b4;}
         #toast {position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:rgba(40,40,40,0.95); color:white; padding:10px 16px; border-radius:20px; opacity:0; transition:all 0.25s; z-index:9999;}
         #toast.show {opacity:1; transform:translateX(-50%) translateY(-6px);}
     </style>
 </head>
 <body>
 
-<form method="get" style="margin-bottom:12px;">
-    <input type="hidden" name="mode" value="{{ mode }}">
-    <input type="hidden" name="tab" value="{{ tab }}">
-    <input type="text" name="user" id="user-input" list="user-list"
-           placeholder="Имя или фамилия (как в таблице)"
-           value="{{ user_name }}"
-           style="width:100%; padding:10px; font-size:16px; border-radius:6px; border:none;"
-           autocomplete="off">
-    <datalist id="user-list">
-        {% for user in all_users %}<option value="{{ user }}">{% endfor %}
-    </datalist>
-</form>
+<div class="topbar">
+    <span class="who">Вы вошли как <strong>{{ user_name }}</strong></span>
+    <a href="/logout">Выйти</a>
+</div>
 
-{% if show_admin_door %}
+{% if is_admin %}
 <a href="/admin" style="display:block; text-align:center; padding:12px; margin-bottom:12px; background:#3a2f5f; color:#fff; border-radius:8px; text-decoration:none; font-weight:600;">🔑 Организаторская</a>
 {% endif %}
 
-<div class="tabs">
+<div class="tabs" id="tabs">
     {% for t in tabs %}
-    <a href="?tab={{ t }}&mode=category&user={{ user_name | urlencode }}" class="tab {% if mode != 'mine' and tab == t %}active{% endif %}">{{ t }}</a>
+    <button class="tab" data-tab="{{ t }}">{{ t }}</button>
     {% endfor %}
 </div>
 
 <div class="modes">
-    <a href="?mode=mine&user={{ user_name | urlencode }}" class="mode {% if mode == 'mine' %}active{% endif %}">Моё</a>
+    <button class="mode" data-mode="mine">Моё</button>
 </div>
 
 <input type="text" id="search" placeholder="Поиск по названию" style="width:100%; padding:8px; margin-bottom:12px; font-size:16px; border-radius:6px; border:none;">
 
-<div id="actions">
-    <button id="copy-btn" onclick="copyMessage()">Скопировать сообщение</button>
-    <button id="clear-btn" onclick="clearPlanned()">Очистить выбор</button>
+<!-- Окошко предпросмотра: что уйдёт в заказ -->
+<div id="preview">
+    <div class="pv-title">Заказ к отправке:</div>
+    <div id="pv-list"></div>
+    <div class="pv-buttons">
+        <button id="send-btn" onclick="sendOrder()">Создать заказ</button>
+        <button id="reset-btn" onclick="resetInputs()">Очистить</button>
+    </div>
 </div>
 
-<textarea id="result" rows="6" readonly></textarea>
-
-<h2>{% if mode == 'mine' %}Мои заказы{% elif tab == 'Общее' %}Все ароматы{% else %}{{ tab }}{% endif %}</h2>
+<h2 id="heading">Все ароматы</h2>
 
 {% for aroma in aromas %}
-<div class="item {% if aroma.ordered_ml > 0 %}mine{% endif %}" onclick="toggle(this)">
+<div class="item {% if aroma.ordered_ml > 0 %}mine{% endif %}"
+     data-name="{{ aroma.aroma_name }}"
+     data-category="{{ aroma.category }}"
+     data-dobor="{{ 1 if aroma.is_dobor else 0 }}"
+     data-ordered="{{ aroma.ordered_ml }}"
+     onclick="toggle(this)">
     <div class="row">
         <div>
-            <div class="name copyable" data-copy="{{ aroma.aroma_name }}">{{ aroma.aroma_name }}</div>
-
+            <div class="name">{{ aroma.aroma_name }}</div>
             {% if aroma.category == 'Духи' and aroma.view %}
                 <div class="meta">Пол: {{ aroma.view }}</div>
             {% endif %}
         </div>
-
         <div class="right">
-            {% if aroma.collected > 0 %}<span class="owned">Набрано: {{ aroma.collected }}</span>{% endif %}
+            <span class="badge b-collected">Набрано: {{ aroma.collected }}</span>
+            <span class="badge b-mine" style="display:none;">Ты взяла: <span class="v-mine">{{ aroma.ordered_ml }}</span></span>
+            <span class="badge b-remaining">Осталось: {{ aroma.remaining }}</span>
             <span class="price">{{ aroma.price }} ₽</span>
         </div>
     </div>
 
     <div class="details">
-
         <div class="prices">
             {% for p in aroma.prices %}
                 <div><strong>{{ p.label }}:</strong> {{ p.value }} ₽</div>
@@ -108,212 +115,211 @@
             {% endif %}
         {% else %}
             {% if aroma.view %}
-                <div style="font-size:14px; opacity:0.85; margin:8px 0;">
-                    {{ aroma.view }}
-                </div>
+                <div style="font-size:14px; opacity:0.85; margin:8px 0;">{{ aroma.view }}</div>
             {% endif %}
         {% endif %}
 
         <div class="status">
             Набрано: <strong>{{ aroma.collected }}</strong>
             Осталось: <strong>{{ aroma.remaining }}</strong><br>
-            {% if aroma.ordered_ml > 0 %}
-                <strong style="color:#8ab4f7;">Ты взяла: {{ aroma.ordered_ml }} мл</strong>
-            {% endif %}
+            <strong class="s-mine" style="color:#8ab4f7;{% if aroma.ordered_ml == 0 %} display:none;{% endif %}">
+                Ты взяла: <span class="v-mine">{{ aroma.ordered_ml }}</span> мл
+            </strong>
         </div>
 
-        <input type="text"
-               placeholder="{% if aroma.category in ['Духи', 'Отдушки'] %}Заказать (мл){% else %}Сколько взять{% endif %}"
+        <input type="number" min="0" inputmode="numeric"
+               placeholder="{% if aroma.category in ['Духи', 'Отдушки'] %}Сколько мл{% else %}Сколько взять{% endif %}"
                class="amount-input"
                data-name="{{ aroma.aroma_name }}"
+               data-current="{{ aroma.ordered_ml }}"
+               value="{% if aroma.ordered_ml > 0 %}{{ aroma.ordered_ml }}{% endif %}"
                style="width:100%; padding:10px; font-size:16px; border-radius:6px; border:none; margin-top:8px;"
                onclick="event.stopPropagation()">
     </div>
 </div>
 {% endfor %}
 
-<!-- === СТАРЫЕ РАБОЧИЕ СКРИПТЫ (полностью восстановлены) === -->
-<script>
-function toggle(item) {
-    const details = item.querySelector(".details");
-    details.style.display = details.style.display === "block" ? "none" : "block";
-}
-
-function generateMessage() {
-    const message = buildMessageText();
-    const textarea = document.getElementById("result");
-
-    if (!message.trim()) {
-        showToast("Ничего не выбрано");
-        textarea.style.display = "none";
-        return;
-    }
-
-    textarea.value = message;
-    textarea.style.display = "block";
-    showToast("Готово!");
-}
-
-function copyMessage() {
-    const textarea = document.getElementById("result");
-    if (!textarea.value.trim()) return;
-    navigator.clipboard.writeText(textarea.value).then(() => {
-        showToast("Скопировано ✓");
-    });
-}
-
-function clearPlanned() {
-    Object.keys(localStorage).forEach(key => {
-        if (key.startsWith("planned_")) localStorage.removeItem(key);
-    });
-
-    document.querySelectorAll(".amount-input").forEach(input => {
-        input.value = "";
-        input.closest(".item")?.classList.remove("planned");
-    });
-
-    document.getElementById("result").value = "";
-    document.getElementById("result").style.display = "none";
-
-    updateGenerateButtonState();
-    updatePreview();
-    showToast("Выбор очищен");
-}
-
-function buildMessageText() {
-    const lines = [];
-    Object.keys(localStorage).forEach(key => {
-        if (key.startsWith("planned_")) {
-            const name = key.replace("planned_", "");
-            const val = localStorage.getItem(key)?.trim();
-            if (val && val !== "" && !isNaN(parseFloat(val))) {
-                lines.push(`${name} — ${val}`);
-            }
-        }
-    });
-    if (lines.length === 0) return "";
-
-    const tag = "{{ order_tag }}";
-    const user = document.querySelector('input[name="user"]')?.value.trim() || "";
-    return `${tag}\n\n${user ? user + '\n' : ''}${lines.join("\n")}`;
-}
-
-function updateGenerateButtonState() {
-    const hasPlanned = Object.keys(localStorage).some(k => k.startsWith("planned_") && localStorage.getItem(k)?.trim());
-    document.querySelector(".generate-btn")?.classList.toggle("active", hasPlanned);
-}
-
-function updatePreview() {
-    const textarea = document.getElementById("result");
-    const msg = buildMessageText();
-    if (msg.trim()) {
-        textarea.value = msg;
-        textarea.style.display = "block";
-    } else {
-        textarea.style.display = "none";
-    }
-}
-
-function showToast(text) {
-    const toast = document.getElementById("toast");
-    toast.textContent = text;
-    toast.classList.add("show");
-    setTimeout(() => toast.classList.remove("show"), 1800);
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-    const userInput = document.querySelector('input[name="user"]');
-    if (userInput) {
-        const saved = localStorage.getItem("user_name");
-        if (saved && !userInput.value) userInput.value = saved;
-        userInput.addEventListener("input", () => {
-            localStorage.setItem("user_name", userInput.value.trim());
-            updateAllLinks();
-        });
-    }
-
-    document.querySelectorAll(".amount-input").forEach(input => {
-        const name = input.dataset.name;
-        const saved = localStorage.getItem("planned_" + name);
-        if (saved && saved.trim() !== "") {
-            input.value = saved;
-            input.closest(".item")?.classList.add("planned");
-        }
-
-        input.addEventListener("input", () => {
-            const val = input.value.trim();
-            const item = input.closest(".item");
-            if (val) {
-                localStorage.setItem("planned_" + name, val);
-                item?.classList.add("planned");
-            } else {
-                localStorage.removeItem("planned_" + name);
-                item?.classList.remove("planned");
-            }
-            updateGenerateButtonState();
-            updatePreview();
-        });
-    });
-
-    document.querySelectorAll(".item").forEach(item => {
-        const nameEl = item.querySelector(".name");
-        if (!nameEl) return;
-        const name = nameEl.textContent.trim();
-        if (localStorage.getItem("planned_" + name)?.trim()) {
-            item.classList.add("planned");
-        }
-    });
-
-    updateGenerateButtonState();
-    updatePreview();
-    updateAllLinks();
-});
-
-function updateAllLinks() {
-    const user = document.querySelector('input[name="user"]')?.value.trim() || "";
-    const params = new URLSearchParams();
-    if (user) params.set("user", user);
-
-    document.querySelectorAll('.tab').forEach(link => {
-        params.set("tab", link.textContent.trim());
-        link.href = "?" + params.toString();
-    });
-
-    document.querySelectorAll('.mode').forEach(link => {
-        if (link.textContent.includes("Моё")) params.set("mode", "mine");
-        link.href = "?" + params.toString();
-    });
-}
-</script>
-
 <div id="toast">Действие выполнено</div>
 
 <script>
-document.addEventListener("DOMContentLoaded", () => {
-    const searchInput = document.getElementById("search");
-    if (!searchInput) return;
+let curTab = "Общее";
+let curMode = "category";   // 'category' | 'mine'
 
-    function filterItems() {
-        const query = searchInput.value.trim().toLowerCase();
-        const items = document.querySelectorAll(".item");
+function toggle(item) {
+    const d = item.querySelector(".details");
+    d.style.display = d.style.display === "block" ? "none" : "block";
+}
 
-        items.forEach(item => {
-            const nameElement = item.querySelector(".name");
-            if (!nameElement) return;
+function showToast(text) {
+    const t = document.getElementById("toast");
+    t.textContent = text;
+    t.classList.add("show");
+    setTimeout(() => t.classList.remove("show"), 1800);
+}
 
-            const name = nameElement.textContent.trim().toLowerCase();
-            const matches = name.includes(query);
+function intVal(inp) {
+    const v = (inp.value || "").trim();
+    if (v === "") return 0;
+    const n = parseInt(v, 10);
+    return (isNaN(n) || n < 0) ? 0 : n;
+}
 
-            item.style.display = matches ? "block" : "none";
-        });
-    }
+// ---- фильтрация вкладок/режима/поиска (всё в браузере, без сервера) ----
+function applyView() {
+    const q = (document.getElementById("search").value || "").trim().toLowerCase();
+    document.querySelectorAll(".item").forEach(item => {
+        const name = (item.dataset.name || "").toLowerCase();
+        const cat = item.dataset.category || "";
+        const dobor = item.dataset.dobor === "1";
+        const ordered = parseInt(item.dataset.ordered || "0", 10) || 0;
 
-    filterItems();
-    searchInput.addEventListener("input", filterItems);
+        let visible;
+        if (curMode === "mine") {
+            visible = ordered > 0;
+        } else if (curTab === "Общее") {
+            visible = !dobor;
+        } else if (curTab === "Добор") {
+            visible = dobor;
+        } else {
+            visible = (cat === curTab) && !dobor;
+        }
+        if (q) visible = visible && name.includes(q);
+        item.style.display = visible ? "block" : "none";
 
-    searchInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") e.preventDefault();
+        // какие бейджи показывать: в «Моё» — Ты взяла, иначе — Набрано
+        const bMine = item.querySelector(".b-mine");
+        const bColl = item.querySelector(".b-collected");
+        if (bMine && bColl) {
+            bMine.style.display = (curMode === "mine") ? "" : "none";
+            bColl.style.display = (curMode === "mine") ? "none" : "";
+        }
     });
+
+    document.getElementById("heading").textContent =
+        (curMode === "mine") ? "Мои заказы"
+        : (curTab === "Общее") ? "Все ароматы" : curTab;
+
+    // подсветка активных кнопок
+    document.querySelectorAll(".tab").forEach(b =>
+        b.classList.toggle("active", curMode !== "mine" && b.dataset.tab === curTab));
+    document.querySelectorAll(".mode").forEach(b =>
+        b.classList.toggle("active", curMode === "mine"));
+}
+
+// ---- предпросмотр заказа (что отличается от текущего) ----
+function pendingItems() {
+    const out = [];
+    document.querySelectorAll(".amount-input").forEach(inp => {
+        const cur = parseInt(inp.dataset.current || "0", 10) || 0;
+        const want = intVal(inp);
+        if (want !== cur) out.push({name: inp.dataset.name, cur, want});
+    });
+    return out;
+}
+
+function refreshPreview() {
+    const items = pendingItems();
+    const box = document.getElementById("preview");
+    const list = document.getElementById("pv-list");
+
+    // подсветка изменённых карточек
+    const changed = new Set(items.map(i => i.name));
+    document.querySelectorAll(".item").forEach(item =>
+        item.classList.toggle("planned", changed.has(item.dataset.name)));
+
+    if (items.length === 0) {
+        box.style.display = "none";
+        return;
+    }
+    list.innerHTML = items.map(i =>
+        i.want === 0
+            ? `<div class="rm">${i.name} — убрать (было ${i.cur})</div>`
+            : `<div>${i.name} — <strong>${i.want}</strong> мл${i.cur ? ` (было ${i.cur})` : ""}</div>`
+    ).join("");
+    box.style.display = "block";
+}
+
+function resetInputs() {
+    document.querySelectorAll(".amount-input").forEach(inp => {
+        const cur = parseInt(inp.dataset.current || "0", 10) || 0;
+        inp.value = cur > 0 ? cur : "";
+    });
+    refreshPreview();
+    showToast("Очищено");
+}
+
+// применить ответ сервера без перезагрузки страницы
+function applyChanges(changes) {
+    changes.forEach(ch => {
+        const to = ch.to, from = ch.from, delta = to - from;
+        document.querySelectorAll(`.amount-input[data-name="${cssEsc(ch.aroma)}"]`).forEach(inp => {
+            inp.dataset.current = to;
+            inp.value = to > 0 ? to : "";
+        });
+        document.querySelectorAll(`.item[data-name="${cssEsc(ch.aroma)}"]`).forEach(item => {
+            item.dataset.ordered = to;
+            item.classList.toggle("mine", to > 0);
+            // «Ты взяла»
+            item.querySelectorAll(".v-mine").forEach(el => el.textContent = to);
+            const sMine = item.querySelector(".s-mine");
+            if (sMine) sMine.style.display = to > 0 ? "" : "none";
+            // «Набрано» += дельта
+            const bColl = item.querySelector(".b-collected");
+            if (bColl) {
+                const m = bColl.textContent.match(/-?\d+/);
+                const val = (m ? parseInt(m[0], 10) : 0) + delta;
+                bColl.textContent = "Набрано: " + val;
+            }
+        });
+    });
+}
+
+function cssEsc(s) { return (window.CSS && CSS.escape) ? CSS.escape(s) : s.replace(/"/g, '\\"'); }
+
+function sendOrder() {
+    const pending = pendingItems();
+    if (pending.length === 0) { showToast("Нет изменений"); return; }
+    const items = {};
+    pending.forEach(i => { items[i.name] = i.want; });
+
+    const btn = document.getElementById("send-btn");
+    btn.disabled = true;
+    fetch("/order", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({items})
+    })
+    .then(r => { if (r.status === 401) { location.href = "/login"; return null; } return r.json(); })
+    .then(res => {
+        btn.disabled = false;
+        if (!res) return;
+        if (res.ok) {
+            applyChanges(res.changes || []);
+            refreshPreview();
+            applyView();
+            showToast("Заказ создан ✓");
+        } else {
+            showToast(res.reason || "Ошибка");
+        }
+    })
+    .catch(() => { btn.disabled = false; showToast("Сеть недоступна"); });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll(".tab").forEach(b =>
+        b.addEventListener("click", () => { curMode = "category"; curTab = b.dataset.tab; applyView(); }));
+    document.querySelectorAll(".mode").forEach(b =>
+        b.addEventListener("click", () => { curMode = "mine"; applyView(); }));
+
+    document.querySelectorAll(".amount-input").forEach(inp =>
+        inp.addEventListener("input", refreshPreview));
+
+    const search = document.getElementById("search");
+    search.addEventListener("input", applyView);
+    search.addEventListener("keydown", e => { if (e.key === "Enter") e.preventDefault(); });
+
+    applyView();
+    refreshPreview();
 });
 </script>
 
