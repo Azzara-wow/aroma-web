@@ -45,6 +45,10 @@
     </datalist>
 </form>
 
+{% if show_admin_door %}
+<a href="/admin" style="display:block; text-align:center; padding:12px; margin-bottom:12px; background:#3a2f5f; color:#fff; border-radius:8px; text-decoration:none; font-weight:600;">🔑 Организаторская</a>
+{% endif %}
+
 <div class="tabs">
     {% for t in tabs %}
     <a href="?tab={{ t }}&mode=category&user={{ user_name | urlencode }}" class="tab {% if mode != 'mine' and tab == t %}active{% endif %}">{{ t }}</a>
@@ -111,7 +115,7 @@
         {% endif %}
 
         <div class="status">
-            Набрано: <strong>{{ aroma.collected }}</strong> 
+            Набрано: <strong>{{ aroma.collected }}</strong>
             Осталось: <strong>{{ aroma.remaining }}</strong><br>
             {% if aroma.ordered_ml > 0 %}
                 <strong style="color:#8ab4f7;">Ты взяла: {{ aroma.ordered_ml }} мл</strong>

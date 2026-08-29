@@ -2,3 +2,7 @@
 __pycache__/
 .env
 .idea/
+/service_account.json
+/test_write.py
+test_write.py
+service_account.json

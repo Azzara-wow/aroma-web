@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Внесение заказов — организатор</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {font-family: system-ui, -apple-system, sans-serif; margin:0; padding:16px; background:#0e1117; color:#fff; max-width:640px;}
+        h1 {font-size:18px; margin:0 0 16px;}
+        label {display:block; font-size:13px; opacity:0.7; margin:12px 0 4px;}
+        input[type=text], input[type=number] {width:100%; padding:12px; font-size:16px; border-radius:8px; border:none; box-sizing:border-box;}
+        .current {margin:12px 0; padding:10px 12px; background:#1a1d23; border-radius:8px; font-size:14px; line-height:1.5; min-height:20px;}
+        .current .hl {color:#8ab4f7; font-weight:600;}
+        .buttons {display:flex; gap:10px; margin-top:14px;}
+        button {flex:1; padding:14px; border-radius:8px; border:none; font-size:16px; font-weight:600; cursor:pointer; color:#fff;}
+        .add {background:#2f6f3e;}
+        .sub {background:#7a2f2f;}
+        .result {margin:14px 0; padding:12px; border-radius:8px; font-size:15px;}
+        .result.ok {background:rgba(80,180,100,0.18);}
+        .result.err {background:rgba(200,80,80,0.20);}
+        .log {margin-top:20px;}
+        .log h2 {font-size:14px; opacity:0.7; margin-bottom:8px;}
+        .log-item {padding:8px 10px; border-bottom:1px solid #2a2d34; font-size:14px;}
+        .nav {margin-bottom:12px; font-size:13px;}
+        .nav a {color:#8ab4f7; text-decoration:none;}
+    </style>
+</head>
+<body>
+
+<div class="nav"><a href="/" class="keep-user" data-base="/">← к витрине покупателя</a></div>
+<div style="display:flex; gap:8px; margin-bottom:16px;">
+    <a href="/admin" class="keep-user" data-base="/admin" style="flex:1; text-align:center; padding:10px; border-radius:8px; text-decoration:none; background:#2a2f38; color:#fff; font-weight:600;">Ввод заказов</a>
+    <a href="/admin/invoices" class="keep-user" data-base="/admin/invoices" style="flex:1; text-align:center; padding:10px; border-radius:8px; text-decoration:none; background:#1a1d23; color:#8ab4f7;">Счета</a>
+</div>
+<h1>Внесение заказов</h1>
+
+{% if result %}
+    {% if result.ok %}
+        <div class="result ok">
+            Записано ✓ <strong>{{ result.buyer }}</strong>: {{ result.aroma }}
+            {{ result.direction }} {{ result.volume }} мл → стало <strong>{{ result.total }} мл</strong>
+            {% if result.created_buyer %}<br>➕ создан новый покупатель «{{ result.buyer }}»{% endif %}
+        </div>
+    {% else %}
+        <div class="result err">⚠ {{ result.msg }}</div>
+    {% endif %}
+{% endif %}
+
+<form method="post" action="/admin/add" id="order-form">
+    <label>Покупатель</label>
+    <input type="text" name="buyer" id="buyer" list="buyer-list" autocomplete="off"
+           value="{{ last_buyer or '' }}" placeholder="Фамилия (из списка или новый)">
+    <datalist id="buyer-list">
+        {% for b in buyers %}<option value="{{ b }}">{% endfor %}
+    </datalist>
+
+    <label>Аромат</label>
+    <input type="text" name="aroma" id="aroma" list="aroma-list" autocomplete="off"
+           placeholder="Начни печатать название">
+    <datalist id="aroma-list">
+        {% for a in aromas %}<option value="{{ a }}">{% endfor %}
+    </datalist>
+
+    <div class="current" id="current">Выбери покупателя и аромат — покажу, сколько уже есть</div>
+
+    <label>Объём (мл)</label>
+    <input type="number" name="volume" id="volume" inputmode="numeric" placeholder="например 50">
+
+    <input type="hidden" name="direction" id="direction" value="плюс">
+
+    <div class="buttons">
+        <button type="submit" class="add" onclick="document.getElementById('direction').value='плюс'">+ Добавить</button>
+        <button type="submit" class="sub" onclick="document.getElementById('direction').value='минус'">− Убрать</button>
+    </div>
+</form>
+
+<div class="log">
+    <h2>Последние внесённые</h2>
+    <div id="log-items"></div>
+</div>
+
+<script>
+// Тащим секретное слово (оно же имя из поля) из localStorage во все ссылки
+// организаторской — по образцу морды, чтобы дверь не терялась между страницами.
+(function keepUserLinks(){
+    const user = (localStorage.getItem("user_name") || "").trim();
+    if (!user) return;
+    document.querySelectorAll("a.keep-user").forEach(a => {
+        const base = a.dataset.base || "/";
+        a.href = base + "?user=" + encodeURIComponent(user);
+    });
+})();
+
+// Текущее количество: запрашиваем у сервера, когда выбраны покупатель+аромат.
+async function refreshCurrent() {
+    const buyer = document.getElementById('buyer').value.trim();
+    const aroma = document.getElementById('aroma').value.trim();
+    const box = document.getElementById('current');
+    if (!buyer || !aroma) {
+        box.innerHTML = "Выбери покупателя и аромат — покажу, сколько уже есть";
+        return;
+    }
+    box.innerHTML = "…";
+    try {
+        const r = await fetch(`/admin/current?buyer=${encodeURIComponent(buyer)}&aroma=${encodeURIComponent(aroma)}`);
+        const d = await r.json();
+        box.innerHTML = `У <span class="hl">${buyer}</span>: ${aroma} — <span class="hl">${d.buyer_qty} мл</span>. Всего набрано: <span class="hl">${d.collected} мл</span>`;
+    } catch(e) {
+        box.innerHTML = "Не удалось получить текущее количество";
+    }
+}
+document.getElementById('buyer').addEventListener('change', refreshCurrent);
+document.getElementById('aroma').addEventListener('change', refreshCurrent);
+
+// Локальный лог последних внесённых (в памяти страницы).
+const LOG_KEY = 'admin_last_orders';
+function renderLog() {
+    let log = [];
+    try { log = JSON.parse(sessionStorage.getItem(LOG_KEY) || '[]'); } catch(e){}
+    const box = document.getElementById('log-items');
+    box.innerHTML = log.slice(0,7).map(x => `<div class="log-item">${x}</div>`).join('') || '<div class="log-item" style="opacity:0.5">пока пусто</div>';
+}
+{% if result and result.ok %}
+(function(){
+    let log = [];
+    try { log = JSON.parse(sessionStorage.getItem(LOG_KEY) || '[]'); } catch(e){}
+    log.unshift("{{ result.buyer }}: {{ result.aroma }} {{ result.direction }} {{ result.volume }} → {{ result.total }} мл");
+    sessionStorage.setItem(LOG_KEY, JSON.stringify(log.slice(0,20)));
+})();
+{% endif %}
+renderLog();
+
+// После успешной записи: покупатель остаётся, аромат и объём чистим, фокус на аромат.
+{% if result and result.ok %}
+    document.getElementById('aroma').value = '';
+    document.getElementById('volume').value = '';
+    document.getElementById('aroma').focus();
+{% endif %}
+</script>
+
+</body>
+</html>

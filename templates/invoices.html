@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Счета — организатор</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {font-family: system-ui, -apple-system, sans-serif; margin:0; padding:16px; background:#0e1117; color:#fff; max-width:860px;}
+        h1 {font-size:19px; margin:0 0 4px;}
+        h2 {font-size:15px; margin:24px 0 10px; opacity:0.9;}
+        .nav {margin-bottom:12px; font-size:13px;} .nav a {color:#8ab4f7; text-decoration:none; margin-right:14px;}
+        table {width:100%; border-collapse:collapse; font-size:14px;}
+        th, td {text-align:left; padding:7px 8px; border-bottom:1px solid #22252c;}
+        th {opacity:0.6; font-weight:600; font-size:12px;}
+        td.num, th.num {text-align:right;}
+        .grand {font-size:16px; font-weight:700; color:#8ab4f7; margin-top:8px;}
+        .buyer-block {margin:14px 0; padding:12px; background:#14171d; border-radius:8px;}
+        .buyer-block h3 {font-size:15px; margin:0 0 8px;}
+        .buyer-total {text-align:right; font-weight:700; color:#8ab4f7; margin-top:6px;}
+        input#filter {width:100%; padding:10px; font-size:15px; border-radius:8px; border:none; margin-bottom:10px; box-sizing:border-box;}
+        .problems {background:rgba(200,120,60,0.15); border-radius:8px; padding:12px; margin:14px 0; font-size:14px;}
+        .problems h2 {margin-top:0; color:#e0a060;}
+        button {padding:10px 16px; border-radius:8px; border:none; font-size:14px; font-weight:600; cursor:pointer; background:#2f5f7a; color:#fff; margin-bottom:10px;}
+        textarea {width:100%; height:180px; background:#1a1d23; color:#fff; border:none; border-radius:8px; padding:10px; font-family:monospace; font-size:12px; box-sizing:border-box;}
+        .err {background:rgba(200,80,80,0.2); padding:14px; border-radius:8px;}
+        .muted {opacity:0.5;}
+    </style>
+</head>
+<body>
+
+<div class="nav">
+    <a href="/" class="keep-user" data-base="/">← витрина</a>
+</div>
+<div style="display:flex; gap:8px; margin-bottom:16px;">
+    <a href="/admin" class="keep-user" data-base="/admin" style="flex:1; text-align:center; padding:10px; border-radius:8px; text-decoration:none; background:#1a1d23; color:#8ab4f7;">Ввод заказов</a>
+    <a href="/admin/invoices" class="keep-user" data-base="/admin/invoices" style="flex:1; text-align:center; padding:10px; border-radius:8px; text-decoration:none; background:#2a2f38; color:#fff; font-weight:600;">Счета</a>
+</div>
+<h1>Счета закупки</h1>
+
+{% if error %}
+    <div class="err">⚠ {{ error }}</div>
+{% elif data %}
+
+    {% if data.problems %}
+    <div class="problems">
+        <h2>⚠ Проблемные позиции ({{ data.problems|length }}) — проверь вручную</h2>
+        {% for p in data.problems %}
+            <div>{{ p.buyer }} — {{ p.aroma }} — {{ p.volume }} мл: {{ p.reason }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <h2>Сводная: кто сколько платит</h2>
+    <table>
+        <tr><th>Покупатель</th><th class="num">Сумма, ₽</th></tr>
+        {% for s in data.summary %}
+        <tr><td>{{ s.buyer }}</td><td class="num">{{ s.total }}</td></tr>
+        {% endfor %}
+    </table>
+    <div class="grand">Итого по закупке: {{ data.grand_total }} ₽</div>
+
+    <h2>Детальные счета</h2>
+    <input type="text" id="filter" placeholder="Фильтр по фамилии — начни печатать">
+    <div id="details">
+        {% for d in data.details %}
+        <div class="buyer-block" data-buyer="{{ d.buyer|lower }}">
+            <h3>{{ d.buyer }}</h3>
+            <table>
+                <tr><th>Аромат</th><th class="num">Объём</th><th class="num">Цена/мл</th><th class="num">Сумма</th></tr>
+                {% for p in d.positions %}
+                <tr>
+                    <td>{{ p.aroma }}</td>
+                    <td class="num">{{ p.volume }}</td>
+                    <td class="num">{{ p.per_ml }}</td>
+                    <td class="num">{{ p.amount }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+            {% if d.problems %}
+                {% for p in d.problems %}
+                <div class="muted">⚠ {{ p.aroma }} {{ p.volume }} мл — {{ p.reason }} (не в сумме)</div>
+                {% endfor %}
+            {% endif %}
+            <div class="buyer-total">Итого: {{ d.total }} ₽</div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <h2>Файл для дашборда</h2>
+    <button onclick="copyExport()">Скопировать для вставки в дашборд</button>
+    <textarea id="export" readonly>Имя покупателя	Название аромата	Объем (мл)	Цена	Сумма
+{% for row in data.export %}{{ row[0] }}	{{ row[1] }}	{{ row[2] }}	{{ row[3] }}	{{ row[4] }}
+{% endfor %}</textarea>
+
+{% endif %}
+
+<script>
+// Тащим секретное слово из localStorage во все ссылки организаторской.
+(function keepUserLinks(){
+    const user = (localStorage.getItem("user_name") || "").trim();
+    if (!user) return;
+    document.querySelectorAll("a.keep-user").forEach(a => {
+        const base = a.dataset.base || "/";
+        a.href = base + "?user=" + encodeURIComponent(user);
+    });
+})();
+
+// Фильтр детальных счетов по фамилии
+const filter = document.getElementById('filter');
+if (filter) {
+    filter.addEventListener('input', () => {
+        const q = filter.value.trim().toLowerCase();
+        document.querySelectorAll('#details .buyer-block').forEach(b => {
+            b.style.display = b.dataset.buyer.includes(q) ? '' : 'none';
+        });
+    });
+}
+function copyExport() {
+    const ta = document.getElementById('export');
+    ta.select();
+    navigator.clipboard.writeText(ta.value).then(() => {
+        const btn = event.target; const old = btn.textContent;
+        btn.textContent = 'Скопировано ✓';
+        setTimeout(() => btn.textContent = old, 1500);
+    });
+}
+</script>
+
+</body>
+</html>
