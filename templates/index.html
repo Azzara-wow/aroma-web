@@ -49,8 +49,7 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
 .search input::placeholder{color:var(--ink-soft)}
 .search input:focus{border-color:var(--clay-soft); box-shadow:0 0 0 3px rgba(180,106,85,.12)}
 .search svg{position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--ink-soft)}
-.tabs{display:flex; gap:7px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none}
-.tabs::-webkit-scrollbar{display:none}
+.tabs{display:flex; flex-wrap:wrap; gap:7px}
 .tab,.mode{flex:0 0 auto; padding:7px 15px; border-radius:6px; font-size:13.5px; font-weight:600;
   color:var(--green); background:transparent; border:1px solid var(--line); cursor:pointer;
   font-family:var(--sans); white-space:nowrap}
@@ -250,6 +249,28 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
       </div>
     </li>
   {% endfor %}
+
+  {% for c in catalog_items %}
+    <li class="item" data-source="catalog" data-name="{{ c.name }}">
+      <div class="head" onclick="toggleItem(this)">
+        <div class="grow">
+          <div class="aname">{{ c.name }}</div>
+          <div class="meta">Ассортимент</div>
+        </div>
+        <div class="pricecol"><div class="price">{% if c.p10 %}от {{ c.p10 | int }}<small> ₽</small>{% endif %}</div></div>
+      </div>
+      <div class="details">
+        <div class="tiers">
+          {% if c.p10 %}<div class="tier"><div class="t-l">10 мл</div><div class="t-v">{{ c.p10 | int }}</div></div>{% endif %}
+          {% if c.p50 %}<div class="tier"><div class="t-l">50 мл</div><div class="t-v">{{ c.p50 | int }}</div></div>{% endif %}
+          {% if c.p100 %}<div class="tier"><div class="t-l">100 мл</div><div class="t-v">{{ c.p100 | int }}</div></div>{% endif %}
+        </div>
+        <a class="frag" href="https://www.google.com/search?q=site:fragrantica.ru {{ c.name | urlencode }}"
+           target="_blank" rel="noopener" onclick="event.stopPropagation()">🔍 Поиск на Fragrantica.ru</a>
+        <div class="hint">Нет в текущей закупке? Напишите в чат — привезём.</div>
+      </div>
+    </li>
+  {% endfor %}
   </ul>
 
   {% if is_auth %}
@@ -303,7 +324,8 @@ function applyView(){
     let visible;
     if (curMode === "mine") visible = ordered > 0;
     else if (curTab === "Наличие") visible = source === "nalichie";
-    else if (source !== "zakupka") visible = false;   // наличие — только на своей вкладке/в «Моё»
+    else if (curTab === "Ассортимент") visible = source === "catalog";
+    else if (source !== "zakupka") visible = false;   // наличие/каталог — только на своих вкладках
     else if (curTab === "Общее") visible = !dobor;
     else if (curTab === "Добор") visible = dobor;
     else visible = (cat === curTab) && !dobor;

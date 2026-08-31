@@ -15,6 +15,7 @@ import auth
 import users
 import flow
 import nalichie
+import catalog
 
 app = FastAPI()
 app.include_router(admin.router)
@@ -80,6 +81,15 @@ def index(request: Request):
         if nalichie_items:
             active_tabs.append("Наличие")
 
+        # Полный каталог «Ассортимент» (view-only). Не критичен для витрины.
+        catalog_items = []
+        try:
+            catalog_items = catalog.catalog()
+        except Exception:
+            traceback.print_exc()
+        if catalog_items:
+            active_tabs.append("Ассортимент")
+
         return templates.TemplateResponse(
             "index.html",
             {
@@ -87,6 +97,7 @@ def index(request: Request):
                 "aromas": visible,
                 "nalichie": nalichie_items,
                 "nal_mine_sum": nal_mine_sum,
+                "catalog_items": catalog_items,
                 "user_name": user["name"] if is_auth else "",
                 "is_auth": is_auth,
                 "tab": tab,

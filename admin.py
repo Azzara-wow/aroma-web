@@ -19,6 +19,50 @@ import users
 import flow
 import auth
 import nalichie
+import catalog
+
+
+# ---------- покупатель по имени (не по телефону) ----------
+
+def _buyer_options():
+    """Покупатели для автоподсказки: [{name, phone}] из Пользователей + потока закупки."""
+    opts = {}
+    try:
+        for u in users.list_users():
+            if u["phone"]:
+                opts[u["phone"]] = u["name"] or opts.get(u["phone"], "")
+    except Exception:
+        pass
+    try:
+        for phone, u in flow.net_orders().items():
+            if phone and not opts.get(phone):
+                opts[phone] = u.get("name", "")
+    except Exception:
+        pass
+    lst = [{"name": n or p, "phone": p} for p, n in opts.items()]
+    lst.sort(key=lambda x: x["name"].lower())
+    return lst
+
+
+def _resolve_buyer(raw, options):
+    """Из ввода 'Имя — телефон' / телефона / имени -> (phone|None, name)."""
+    raw = (raw or "").strip()
+    canon = users.normalize_phone(raw)
+    if users.valid_phone(canon):
+        for o in options:
+            if o["phone"] == canon:
+                return canon, o["name"]
+        return canon, ""
+    if "—" in raw:
+        head, tail = raw.rsplit("—", 1)
+        t = users.normalize_phone(tail)
+        if users.valid_phone(t):
+            return t, head.strip()
+    low = raw.lower()
+    for o in options:
+        if o["name"].lower() == low:
+            return o["phone"], o["name"]
+    return None, raw
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -115,7 +159,7 @@ def admin_page(request: Request):
         {
             "request": request,
             "aromas": _live_aromas(),
-            "users_list": users.list_users(),
+            "users_list": _buyer_options(),
         },
     )
 
@@ -142,25 +186,27 @@ def admin_add(
     if not _require_admin(request):
         return RedirectResponse("/login", status_code=303)
 
-    # имя-снимок берём из листа Пользователи (если телефон зарегистрирован)
-    known = users.get_user(phone)
-    name = known["name"] if known else ""
+    options = _buyer_options()
+    phone_val, name = _resolve_buyer(phone, options)
 
-    try:
-        result = flow.add_order(phone, name, aroma, volume, direction)
-        if result.get("ok"):
-            result["buyer"] = name or result.get("phone", phone)
-        else:
-            result["msg"] = result.get("reason", "ошибка")
-    except Exception as e:
-        result = {"ok": False, "msg": f"{type(e).__name__}: {e}"}
+    if not phone_val:
+        result = {"ok": False, "msg": "Покупатель не найден — выберите из списка или введите телефон 7XXXXXXXXXX"}
+    else:
+        try:
+            result = flow.add_order(phone_val, name, aroma, volume, direction)
+            if result.get("ok"):
+                result["buyer"] = name or result.get("phone", phone_val)
+            else:
+                result["msg"] = result.get("reason", "ошибка")
+        except Exception as e:
+            result = {"ok": False, "msg": f"{type(e).__name__}: {e}"}
 
     return templates.TemplateResponse(
         "admin.html",
         {
             "request": request,
             "aromas": _live_aromas(),
-            "users_list": users.list_users(),
+            "users_list": options,
             "result": result,
             "last_phone": phone,
         },
@@ -176,8 +222,16 @@ def _nalichie_names():
         return []
 
 
+def _catalog_names():
+    try:
+        return catalog.names()
+    except Exception:
+        return []
+
+
 def _render_nalichie(request, **extra):
-    ctx = {"request": request, "items": _nalichie_names(), "users_list": users.list_users()}
+    ctx = {"request": request, "items": _nalichie_names(),
+           "users_list": _buyer_options(), "catalog_names": _catalog_names()}
     ctx.update(extra)
     return templates.TemplateResponse("admin_nalichie.html", ctx)
 
@@ -230,18 +284,22 @@ def admin_nalichie_order(
     phone: str = Form(...),
     item: str = Form(...),
     qty: str = Form(...),
+    direction: str = Form("плюс"),
     done: str = Form(""),
 ):
     if not _require_admin(request):
         return RedirectResponse("/login", status_code=303)
-    known = users.get_user(phone)
-    name = known["name"] if known else ""
+    phone_val, name = _resolve_buyer(phone, _buyer_options())
+    if not phone_val:
+        return _render_nalichie(request, order_result={
+            "ok": False, "msg": "Покупатель не найден — выберите из списка или введите телефон"})
     try:
-        res = nalichie.add_order(phone, name, item, qty, done=bool(done))
+        res = nalichie.add_order(phone_val, name, item, qty, done=bool(done), direction=direction)
         if res.get("ok"):
             ch = res.get("change") or {}
             order_result = {"ok": True, "buyer": name or phone, "item": ch.get("item", item),
-                            "added": ch.get("added"), "sum": ch.get("sum"), "done": bool(done)}
+                            "added": ch.get("added"), "sum": ch.get("sum"),
+                            "done": bool(done), "direction": direction}
         else:
             order_result = {"ok": False, "msg": res.get("reason", "ошибка")}
     except Exception as e:

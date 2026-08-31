@@ -179,6 +179,9 @@ def view(phone_raw=None):
         show = core.to_num(_cell(row, aci["show"]))
         avail = stock - consumed.get(name.lower(), 0)
         mq = mine.get(name.lower(), 0)
+        # прячем распроданное (остаток<=0), кроме позиций с активным заказом покупателя
+        if avail <= 0 and mq <= 0:
+            continue
         if mq > 0:
             mine_sum += round(mq * per_ml)
         items.append({"name": name, "per_ml": per_ml, "show": show,
@@ -301,10 +304,45 @@ def add_item(name, stock, per_ml, show=""):
     return {"ok": True, "name": name}
 
 
-def add_order(phone_raw, name, item, qty, done=False):
+def _append_flow(phone, name, item, qty, direction, status, per_ml, show):
+    """Записать одну строку в поток наличия (кол-во положительное, знак — в 'Направление').
+    Сумма минусовой строки отрицательная (для корректных итогов в дашборде)."""
+    fvalues, fheader, fci = _flow_rows()
+    stamp = datetime.now().strftime("%d.%m.%Y")
+    summ = round(qty * per_ml)
+    if direction == "минус":
+        summ = -summ
+    mapping = {"date": stamp, "phone": phone, "status": status,
+               "iname": (name or "").strip(), "item": item, "qty": qty,
+               "perml": per_ml or "", "show": show or "", "sum": summ, "dir": direction}
+    sheets.worksheet_by_gid(FLOW_GID, NALICHIE_URL).append_row(
+        _row_for(fheader, fci, mapping), value_input_option="USER_ENTERED")
+    return summ
+
+
+def add_order(phone_raw, name, item, qty, done=False, direction="плюс"):
     """Организатор вносит заказ покупателя по складу (подстраховка из чата).
-    done=True -> сразу статус 'выполнено'. Остаток тоже проверяем."""
-    res = add_batch(phone_raw, name, {item: qty}, status=(STATUS_DONE if done else ""))
+    direction='плюс' (с проверкой остатка) или 'минус' (уменьшить, без проверки).
+    done=True -> сразу статус 'выполнено'."""
+    phone = users.normalize_phone(phone_raw)
+    if not users.valid_phone(phone):
+        return {"ok": False, "reason": "Телефон в формате 7XXXXXXXXXX"}
+    item = core.norm(item)
+    q = int(core.to_num(qty))
+    if item == "" or q <= 0:
+        return {"ok": False, "reason": "Укажите товар и количество больше 0"}
+    status = STATUS_DONE if done else ""
+
+    if core.norm(direction).lower() == "минус":
+        info = next((i for i in assortment() if i["name"].lower() == item.lower()), None)
+        per_ml = info["per_ml"] if info else 0
+        show = info["show"] if info else ""
+        name_item = info["name"] if info else item
+        summ = _append_flow(phone, name, name_item, q, "минус", status, per_ml, show)
+        return {"ok": True, "change": {"item": name_item, "added": -q, "sum": summ}}
+
+    # плюс — через add_batch (с проверкой остатка)
+    res = add_batch(phone_raw, name, {item: qty}, status=status)
     if not res.get("ok"):
         return res
     if res["rejected"]:

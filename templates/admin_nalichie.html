@@ -15,6 +15,9 @@
         .current {margin:12px 0; padding:10px 12px; background:#1a1d23; border-radius:8px; font-size:14px; line-height:1.5; min-height:20px;}
         .current .hl {color:#8ab4f7; font-weight:600;}
         button {width:100%; margin-top:14px; padding:14px; border-radius:8px; border:none; font-size:16px; font-weight:600; cursor:pointer; color:#fff; background:#2f6f3e;}
+        .btns {display:flex; gap:10px;}
+        .btns button {flex:1;}
+        .btns .sub {background:#7a2f2f;}
         .result {margin:14px 0; padding:12px; border-radius:8px; font-size:15px;}
         .result.ok {background:rgba(80,180,100,0.18);}
         .result.err {background:rgba(200,80,80,0.20);}
@@ -41,19 +44,19 @@
 
 {% if order_result %}
     {% if order_result.ok %}
-        <div class="result ok">Записано ✓ <strong>{{ order_result.buyer }}</strong>: {{ order_result.item }}
-            +{{ order_result.added }} на {{ order_result.sum }} ₽{% if order_result.done %} · статус «выполнено»{% endif %}</div>
+        <div class="result ok">Записано ✓ <strong>{{ order_result.buyer }}</strong>: {{ order_result.item }} —
+            {{ 'убрано' if order_result.direction == 'минус' else 'добавлено' }} {{ order_result.added | abs }} на {{ order_result.sum | abs }} ₽{% if order_result.done %} · статус «выполнено»{% endif %}</div>
     {% else %}
         <div class="result err">⚠ {{ order_result.msg }}</div>
     {% endif %}
 {% endif %}
 
 <form method="post" action="/admin/nalichie/order">
-    <label>Покупатель (телефон)</label>
+    <label>Покупатель (имя или телефон)</label>
     <input type="text" name="phone" id="n-phone" list="user-list" autocomplete="off"
-           inputmode="numeric" value="{{ last_phone or '' }}" placeholder="7XXXXXXXXXX">
+           value="{{ last_phone or '' }}" placeholder="начни печатать имя или фамилию">
     <datalist id="user-list">
-        {% for u in users_list %}<option value="{{ u.phone }}">{{ u.name }}</option>{% endfor %}
+        {% for u in users_list %}<option value="{{ u.name }} — {{ u.phone }}"></option>{% endfor %}
     </datalist>
 
     <label>Товар со склада</label>
@@ -69,7 +72,11 @@
 
     <label class="check"><input type="checkbox" name="done" value="1"> Сразу «Выполнено» (отгружено)</label>
 
-    <button type="submit">Внести заказ</button>
+    <input type="hidden" name="direction" id="n-dir" value="плюс">
+    <div class="btns">
+        <button type="submit" class="add" onclick="document.getElementById('n-dir').value='плюс'">+ Добавить</button>
+        <button type="submit" class="sub" onclick="document.getElementById('n-dir').value='минус'">− Убрать</button>
+    </div>
 </form>
 </div>
 
@@ -83,7 +90,10 @@
 
 <form method="post" action="/admin/nalichie/item">
     <label>Наименование</label>
-    <input type="text" name="name" autocomplete="off" placeholder="как в закупке, если есть">
+    <input type="text" name="name" list="catalog-list" autocomplete="off" placeholder="из каталога Ассортимента">
+    <datalist id="catalog-list">
+        {% for c in catalog_names %}<option value="{{ c }}"></option>{% endfor %}
+    </datalist>
 
     <label>Остаток (закуплено, накопительно)</label>
     <input type="number" name="stock" inputmode="numeric" placeholder="например 500">

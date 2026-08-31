@@ -47,11 +47,11 @@
 {% endif %}
 
 <form method="post" action="/admin/add" id="order-form">
-    <label>Покупатель (телефон)</label>
+    <label>Покупатель (имя или телефон)</label>
     <input type="text" name="phone" id="phone" list="user-list" autocomplete="off"
-           inputmode="numeric" value="{{ last_phone or '' }}" placeholder="7XXXXXXXXXX">
+           value="{{ last_phone or '' }}" placeholder="начни печатать имя или фамилию">
     <datalist id="user-list">
-        {% for u in users_list %}<option value="{{ u.phone }}">{{ u.name }}</option>{% endfor %}
+        {% for u in users_list %}<option value="{{ u.name }} — {{ u.phone }}"></option>{% endfor %}
     </datalist>
 
     <label>Аромат</label>
