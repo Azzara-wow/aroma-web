@@ -29,10 +29,11 @@
 
 <div class="nav"><a href="/">← к витрине покупателя</a></div>
 <div style="display:flex; gap:8px; margin-bottom:16px;">
-    <a href="/admin" style="flex:1; text-align:center; padding:10px; border-radius:8px; text-decoration:none; background:#2a2f38; color:#fff; font-weight:600;">Ввод заказов</a>
+    <a href="/admin" style="flex:1; text-align:center; padding:10px; border-radius:8px; text-decoration:none; background:#2a2f38; color:#fff; font-weight:600;">Закупка</a>
+    <a href="/admin/nalichie" style="flex:1; text-align:center; padding:10px; border-radius:8px; text-decoration:none; background:#1a1d23; color:#8ab4f7;">Наличие</a>
     <a href="/admin/invoices" style="flex:1; text-align:center; padding:10px; border-radius:8px; text-decoration:none; background:#1a1d23; color:#8ab4f7;">Счета</a>
 </div>
-<h1>Внесение заказов</h1>
+<h1>Внесение заказов (закупка)</h1>
 
 {% if result %}
     {% if result.ok %}

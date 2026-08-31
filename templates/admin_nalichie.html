@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Наличие — организатор</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {font-family: system-ui, -apple-system, sans-serif; margin:0; padding:16px; background:#0e1117; color:#fff; max-width:640px;}
+        h1 {font-size:18px; margin:18px 0 6px;}
+        h1.first {margin-top:4px;}
+        label {display:block; font-size:13px; opacity:0.7; margin:12px 0 4px;}
+        input[type=text], input[type=number] {width:100%; padding:12px; font-size:16px; border-radius:8px; border:none; box-sizing:border-box;}
+        .check {display:flex; align-items:center; gap:8px; margin-top:12px; font-size:15px;}
+        .check input {width:20px; height:20px;}
+        .current {margin:12px 0; padding:10px 12px; background:#1a1d23; border-radius:8px; font-size:14px; line-height:1.5; min-height:20px;}
+        .current .hl {color:#8ab4f7; font-weight:600;}
+        button {width:100%; margin-top:14px; padding:14px; border-radius:8px; border:none; font-size:16px; font-weight:600; cursor:pointer; color:#fff; background:#2f6f3e;}
+        .result {margin:14px 0; padding:12px; border-radius:8px; font-size:15px;}
+        .result.ok {background:rgba(80,180,100,0.18);}
+        .result.err {background:rgba(200,80,80,0.20);}
+        .card {background:#14171d; border-radius:10px; padding:14px 16px; margin-bottom:18px;}
+        .nav {margin-bottom:12px; font-size:13px;} .nav a {color:#8ab4f7; text-decoration:none;}
+        .subnav {display:flex; gap:8px; margin-bottom:16px;}
+        .subnav a {flex:1; text-align:center; padding:10px; border-radius:8px; text-decoration:none; background:#1a1d23; color:#8ab4f7;}
+        .subnav a.active {background:#2a2f38; color:#fff; font-weight:600;}
+        .muted {font-size:12px; opacity:0.6; margin-top:6px;}
+    </style>
+</head>
+<body>
+
+<div class="nav"><a href="/">← к витрине</a></div>
+<div class="subnav">
+    <a href="/admin">Закупка</a>
+    <a href="/admin/nalichie" class="active">Наличие</a>
+    <a href="/admin/invoices">Счета</a>
+</div>
+
+<!-- ===== Внести заказ покупателя в наличие ===== -->
+<div class="card">
+<h1 class="first">Заказ покупателя (наличие)</h1>
+
+{% if order_result %}
+    {% if order_result.ok %}
+        <div class="result ok">Записано ✓ <strong>{{ order_result.buyer }}</strong>: {{ order_result.item }}
+            +{{ order_result.added }} на {{ order_result.sum }} ₽{% if order_result.done %} · статус «выполнено»{% endif %}</div>
+    {% else %}
+        <div class="result err">⚠ {{ order_result.msg }}</div>
+    {% endif %}
+{% endif %}
+
+<form method="post" action="/admin/nalichie/order">
+    <label>Покупатель (телефон)</label>
+    <input type="text" name="phone" id="n-phone" list="user-list" autocomplete="off"
+           inputmode="numeric" value="{{ last_phone or '' }}" placeholder="7XXXXXXXXXX">
+    <datalist id="user-list">
+        {% for u in users_list %}<option value="{{ u.phone }}">{{ u.name }}</option>{% endfor %}
+    </datalist>
+
+    <label>Товар со склада</label>
+    <input type="text" name="item" id="n-item" list="item-list" autocomplete="off" placeholder="Начни печатать">
+    <datalist id="item-list">
+        {% for a in items %}<option value="{{ a }}">{% endfor %}
+    </datalist>
+
+    <div class="current" id="n-current">Выбери товар — покажу, сколько на складе</div>
+
+    <label>Количество</label>
+    <input type="number" name="qty" inputmode="numeric" placeholder="например 50">
+
+    <label class="check"><input type="checkbox" name="done" value="1"> Сразу «Выполнено» (отгружено)</label>
+
+    <button type="submit">Внести заказ</button>
+</form>
+</div>
+
+<!-- ===== Добавить/пополнить товар в наличии ===== -->
+<div class="card">
+<h1 class="first">Добавить товар в наличие</h1>
+
+{% if item_result %}
+    <div class="result {{ 'ok' if item_result.ok else 'err' }}">{{ '✓ ' if item_result.ok else '⚠ ' }}{{ item_result.msg }}</div>
+{% endif %}
+
+<form method="post" action="/admin/nalichie/item">
+    <label>Наименование</label>
+    <input type="text" name="name" autocomplete="off" placeholder="как в закупке, если есть">
+
+    <label>Остаток (закуплено, накопительно)</label>
+    <input type="number" name="stock" inputmode="numeric" placeholder="например 500">
+
+    <label>Цена за 1 мл</label>
+    <input type="number" name="per_ml" inputmode="decimal" step="0.01" placeholder="истина для суммы">
+
+    <label>Цена 10/50 мл (витринная, необязательно)</label>
+    <input type="number" name="show" inputmode="numeric" placeholder="что видят покупатели">
+
+    <button type="submit">Добавить товар</button>
+    <div class="muted">Новая строка добавляется в конец листа ассортимента. Пополнить остаток можно, изменив «Остаток» прямо в таблице.</div>
+</form>
+</div>
+
+<script>
+async function refreshCurrent() {
+    const item = document.getElementById('n-item').value.trim();
+    const box = document.getElementById('n-current');
+    if (!item) { box.innerHTML = "Выбери товар — покажу, сколько на складе"; return; }
+    box.innerHTML = "…";
+    try {
+        const r = await fetch(`/admin/nalichie/current?item=${encodeURIComponent(item)}`);
+        const d = await r.json();
+        if (d.available === undefined) { box.innerHTML = d.note || "нет данных"; return; }
+        box.innerHTML = `<span class="hl">${item}</span> — на складе <span class="hl">${d.available}</span> `
+            + `(закуплено ${d.stock}, расход ${d.consumed}), цена/мл <span class="hl">${d.per_ml}</span>`;
+    } catch(e) { box.innerHTML = "Не удалось получить остаток"; }
+}
+document.getElementById('n-item').addEventListener('change', refreshCurrent);
+</script>
+
+</body>
+</html>

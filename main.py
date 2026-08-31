@@ -14,6 +14,7 @@ import admin
 import auth
 import users
 import flow
+import nalichie
 
 app = FastAPI()
 app.include_router(admin.router)
@@ -70,11 +71,22 @@ def index(request: Request):
         if has_dobor:
             active_tabs.append("Добор")
 
+        # Наличие (вторая книга). Если недоступна — витрина закупки всё равно грузится.
+        nalichie_items, nal_mine_sum = [], 0
+        try:
+            nalichie_items, nal_mine_sum = nalichie.view(user["phone"] if is_auth else None)
+        except Exception:
+            traceback.print_exc()
+        if nalichie_items:
+            active_tabs.append("Наличие")
+
         return templates.TemplateResponse(
             "index.html",
             {
                 "request": request,
                 "aromas": visible,
+                "nalichie": nalichie_items,
+                "nal_mine_sum": nal_mine_sum,
                 "user_name": user["name"] if is_auth else "",
                 "is_auth": is_auth,
                 "tab": tab,
@@ -99,26 +111,30 @@ def index(request: Request):
 
 
 class OrderIn(BaseModel):
-    items: dict = {}
+    zakupka: dict = {}    # {аромат: добавить_мл} -> поток закупки
+    nalichie: dict = {}   # {товар: добавить}     -> поток наличия
 
 
 @app.post("/order")
 def order(request: Request, payload: OrderIn):
     """
-    Принять ДОБАВЛЕНИЯ от витрины и записать их в Поток (только прибавление).
-    Тело: {"items": {"<аромат>": <добавить_мл>, ...}}. Личность — из куки.
+    Принять ДОБАВЛЕНИЯ от витрины (только прибавление) и разложить в разные листы:
+    закупку — в поток закупки, наличие — в поток наличия. Личность — из куки.
     """
     user = auth.current_user(request)
     if not user:
         return JSONResponse({"ok": False, "reason": "not_authenticated"}, status_code=401)
     try:
-        res = flow.add_batch(user["phone"], user["name"], payload.items or {})
+        res_z = flow.add_batch(user["phone"], user["name"], payload.zakupka) \
+            if payload.zakupka else {"ok": True, "changes": []}
+        res_n = nalichie.add_batch(user["phone"], user["name"], payload.nalichie) \
+            if payload.nalichie else {"ok": True, "changes": [], "rejected": []}
     except Exception:
         traceback.print_exc()
-        # Запись (POST) не повторяем автоматически — просим повторить вручную.
         return JSONResponse(
             {"ok": False, "reason": "Связь прервалась, попробуйте ещё раз"},
             status_code=503,
         )
-    status = 200 if res.get("ok") else 400
-    return JSONResponse(res, status_code=status)
+    ok = res_z.get("ok") and res_n.get("ok")
+    return JSONResponse({"ok": ok, "zakupka": res_z, "nalichie": res_n},
+                        status_code=200 if ok else 400)

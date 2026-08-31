@@ -1,14 +1,10 @@
-# sheets.py — aroma_web / единая точка подключения к гуглтаблице.
+# sheets.py — aroma_web / единая точка подключения к гуглтаблицам.
 #
-# Зачем этот файл:
-#   На Шаге 3 книга приватная — Ассортимент, Поток и Пользователи читаются/пишутся
-#   только через сервисный аккаунт (gspread). Чтобы способ открыть книгу был ОДИН,
-#   всё подключение живёт здесь.
-#
-# ПРОИЗВОДИТЕЛЬНОСТЬ: подключение (ключ, OAuth-токен, открытая книга и листы)
-# КЭШИРУЕТСЯ на процесс. Иначе каждый запрос заново авторизовывался и заново
-# открывал книгу — это давало десятки секунд задержки. Токен google-auth
-# обновляет себя сам, так что держать клиент открытым безопасно.
+# Поддерживает НЕСКОЛЬКО книг (закупка + Наличие) на одном сервисном аккаунте:
+#   - без аргумента url работаем с книгой закупки (core.SHEET_URL);
+#   - с url="..." — с любой другой книгой (напр. Наличие).
+# Подключение (клиент, книги, листы) кэшируется на процесс; ретраи и таймаут —
+# на обрывах канала (частая беда доступа к Google из РФ).
 
 import os
 from urllib.parse import urlparse
@@ -26,14 +22,14 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # --- кэши на процесс ---
 _client = None
-_book = None
-_ws_by_title = {}
-_ws_by_gid = {}
+_books = {}          # id -> Spreadsheet
+_ws_title = {}       # (id, title) -> Worksheet
+_ws_gid = {}         # (id, gid) -> Worksheet
 
 
-def spreadsheet_id() -> str:
-    """ID книги из core.SHEET_URL (.../d/<ID>/edit...)."""
-    parts = urlparse(core.SHEET_URL).path.split("/")
+def spreadsheet_id(url: str = None) -> str:
+    """ID книги из url (или core.SHEET_URL по умолчанию)."""
+    parts = urlparse(url or core.SHEET_URL).path.split("/")
     return parts[parts.index("d") + 1]
 
 
@@ -47,16 +43,8 @@ def _find_key_path() -> str:
 
 
 def _install_retries(client):
-    """
-    Автоповтор на обрывах/временных ошибках Google (частая беда канала из РФ:
-    'Remote end closed connection without response' на переиспользованном
-    keep-alive соединении). Повторяем ТОЛЬКО идемпотентные методы:
-      GET  — чтение листов,
-      PUT  — правка ячейки (update_acell: ставит значение, повтор безопасен).
-    POST (append_row/append_rows — добавление заказа) НЕ повторяем: при обрыве
-    неизвестно, применился ли он, и повтор мог бы задвоить строку.
-    Плюс общий таймаут, чтобы зависший запрос не висел бесконечно.
-    """
+    """Автоповтор идемпотентных запросов (GET/PUT) на обрывах и 429/5xx + таймаут.
+    POST (append) не повторяем, чтобы не задвоить заказ."""
     try:
         from requests.adapters import HTTPAdapter
         from urllib3.util.retry import Retry
@@ -71,9 +59,9 @@ def _install_retries(client):
         session.mount("https://", adapter)
         session.mount("http://", adapter)
     except Exception:
-        pass  # ретраи — улучшение, не критично
+        pass
     try:
-        client.set_timeout(20)  # секунд на запрос
+        client.set_timeout(20)
     except Exception:
         pass
 
@@ -87,43 +75,56 @@ def _get_client():
     return _client
 
 
-def open_book():
-    """Открытая книга (кэшируется на процесс)."""
-    global _book
-    if _book is None:
-        _book = _get_client().open_by_key(spreadsheet_id())
-    return _book
+def open_book(url: str = None):
+    """Открытая книга (кэшируется по id). url=None -> книга закупки."""
+    sid = spreadsheet_id(url)
+    if sid not in _books:
+        _books[sid] = _get_client().open_by_key(sid)
+    return _books[sid]
 
 
-def worksheet_by_gid(gid: int):
-    """Лист по номеру gid (кэшируется)."""
-    if gid not in _ws_by_gid:
-        _ws_by_gid[gid] = open_book().get_worksheet_by_id(gid)
-    return _ws_by_gid[gid]
+def worksheet_by_gid(gid: int, url: str = None):
+    """Лист по номеру gid в нужной книге (кэшируется)."""
+    sid = spreadsheet_id(url)
+    key = (sid, gid)
+    if key not in _ws_gid:
+        _ws_gid[key] = open_book(url).get_worksheet_by_id(gid)
+    return _ws_gid[key]
 
 
-def get_or_create_ws(title: str, header: list):
+def worksheet_by_title(title: str, url: str = None):
+    """Лист по имени в нужной книге (кэшируется)."""
+    sid = spreadsheet_id(url)
+    key = (sid, title)
+    if key not in _ws_title:
+        _ws_title[key] = open_book(url).worksheet(title)
+    return _ws_title[key]
+
+
+def get_or_create_ws(title: str, header: list, url: str = None):
     """Лист по имени; если его нет — создаём с шапкой. Результат кэшируется."""
-    if title in _ws_by_title:
-        return _ws_by_title[title]
-    book = open_book()
+    sid = spreadsheet_id(url)
+    key = (sid, title)
+    if key in _ws_title:
+        return _ws_title[key]
+    book = open_book(url)
     try:
         ws = book.worksheet(title)
     except gspread.WorksheetNotFound:
         ws = book.add_worksheet(title=title, rows=1000, cols=max(len(header), 1))
         if header:
             ws.update(f"A1:{col_a1(len(header) - 1)}1", [header])
-    _ws_by_title[title] = ws
+    _ws_title[key] = ws
     return ws
 
 
 def reset_cache():
     """Сбросить кэши подключения (на случай проблем с токеном/структурой)."""
-    global _client, _book
+    global _client
     _client = None
-    _book = None
-    _ws_by_title.clear()
-    _ws_by_gid.clear()
+    _books.clear()
+    _ws_title.clear()
+    _ws_gid.clear()
 
 
 def col_a1(col_idx_0: int) -> str:

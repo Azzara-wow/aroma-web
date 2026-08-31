@@ -18,6 +18,7 @@ import core
 import users
 import flow
 import auth
+import nalichie
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -164,6 +165,88 @@ def admin_add(
             "last_phone": phone,
         },
     )
+
+
+# ---------- организаторский режим: Наличие ----------
+
+def _nalichie_names():
+    try:
+        return sorted({i["name"] for i in nalichie.assortment()}, key=str.lower)
+    except Exception:
+        return []
+
+
+def _render_nalichie(request, **extra):
+    ctx = {"request": request, "items": _nalichie_names(), "users_list": users.list_users()}
+    ctx.update(extra)
+    return templates.TemplateResponse("admin_nalichie.html", ctx)
+
+
+@router.get("/admin/nalichie", response_class=HTMLResponse)
+def admin_nalichie_page(request: Request):
+    if not _require_admin(request):
+        return RedirectResponse("/login", status_code=303)
+    return _render_nalichie(request)
+
+
+@router.get("/admin/nalichie/current")
+def admin_nalichie_current(request: Request, item: str):
+    """Остаток/доступно по товару склада — для подсказки в форме."""
+    if not _require_admin(request):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+    try:
+        target = item.strip().lower()
+        for i in nalichie.assortment():
+            if i["name"].lower() == target:
+                return {"available": i["available"], "stock": i["stock"],
+                        "consumed": i["consumed"], "per_ml": i["per_ml"]}
+        return {"available": "—", "note": "нет такого товара"}
+    except Exception as e:
+        return {"available": "?", "error": f"{type(e).__name__}: {e}"}
+
+
+@router.post("/admin/nalichie/item", response_class=HTMLResponse)
+def admin_nalichie_item(
+    request: Request,
+    name: str = Form(...),
+    stock: str = Form("0"),
+    per_ml: str = Form("0"),
+    show: str = Form(""),
+):
+    if not _require_admin(request):
+        return RedirectResponse("/login", status_code=303)
+    try:
+        res = nalichie.add_item(name, stock, per_ml, show)
+        item_result = {"ok": res.get("ok"),
+                       "msg": ("Добавлено: " + res["name"]) if res.get("ok") else res.get("reason", "ошибка")}
+    except Exception as e:
+        item_result = {"ok": False, "msg": f"{type(e).__name__}: {e}"}
+    return _render_nalichie(request, item_result=item_result)
+
+
+@router.post("/admin/nalichie/order", response_class=HTMLResponse)
+def admin_nalichie_order(
+    request: Request,
+    phone: str = Form(...),
+    item: str = Form(...),
+    qty: str = Form(...),
+    done: str = Form(""),
+):
+    if not _require_admin(request):
+        return RedirectResponse("/login", status_code=303)
+    known = users.get_user(phone)
+    name = known["name"] if known else ""
+    try:
+        res = nalichie.add_order(phone, name, item, qty, done=bool(done))
+        if res.get("ok"):
+            ch = res.get("change") or {}
+            order_result = {"ok": True, "buyer": name or phone, "item": ch.get("item", item),
+                            "added": ch.get("added"), "sum": ch.get("sum"), "done": bool(done)}
+        else:
+            order_result = {"ok": False, "msg": res.get("reason", "ошибка")}
+    except Exception as e:
+        order_result = {"ok": False, "msg": f"{type(e).__name__}: {e}"}
+    return _render_nalichie(request, order_result=order_result, last_phone=phone)
 
 
 @router.get("/admin/invoices", response_class=HTMLResponse)
