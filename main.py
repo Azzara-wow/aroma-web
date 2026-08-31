@@ -4,6 +4,7 @@
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 import traceback
@@ -17,6 +18,7 @@ import flow
 app = FastAPI()
 app.include_router(admin.router)
 app.include_router(auth.router)
+app.mount("/static", StaticFiles(directory="static"), name="static")  # логотип и пр.
 templates = Jinja2Templates(directory="templates")
 
 
