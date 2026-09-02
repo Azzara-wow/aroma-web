@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Уведомления Telegram — организатор</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {font-family: system-ui, -apple-system, sans-serif; margin:0; padding:16px; background:#0e1117; color:#fff; max-width:640px;}
+        h1 {font-size:18px; margin:0 0 12px;}
+        .nav {margin-bottom:14px; font-size:13px;} .nav a {color:#8ab4f7; text-decoration:none;}
+        .card {background:#1a1d23; border-radius:8px; padding:14px; margin-bottom:14px; font-size:14px; line-height:1.5;}
+        .ok {color:#7fd18f;} .bad {color:#ffb4b4;}
+        ol {margin:8px 0 0; padding-left:20px; line-height:1.6;}
+        code {background:#2a2f38; padding:2px 6px; border-radius:4px;}
+        table {width:100%; border-collapse:collapse; margin-top:8px;}
+        td {padding:6px 8px; border-bottom:1px solid #2a2d34;}
+        .id {font-weight:700; color:#8ab4f7; font-variant-numeric:tabular-nums;}
+        a.btn {display:inline-block; margin-top:10px; padding:10px 16px; background:#2f6f3e; color:#fff; border-radius:8px; text-decoration:none; font-weight:600;}
+    </style>
+</head>
+<body>
+<div class="nav"><a href="/admin">← в организаторскую</a></div>
+<h1>Уведомления в Telegram</h1>
+
+<div class="card">
+    Статус:
+    Токен бота — <strong class="{{ 'ok' if token_set else 'bad' }}">{{ 'задан' if token_set else 'не задан' }}</strong>;
+    получатель (chat_id) — <strong class="{{ 'ok' if chat_set else 'bad' }}">{{ current if chat_set else 'не задан' }}</strong>.
+    {% if token_set and chat_set %}<br><span class="ok">Всё настроено ✓</span>{% endif %}
+</div>
+
+{% if test_res %}
+<div class="card">
+    Тест: {% if test_res.ok %}<span class="ok">отправлено ✓ — проверьте Telegram</span>{% else %}<span class="bad">не отправлено: {{ test_res.reason }}</span>{% endif %}
+</div>
+{% endif %}
+
+<div class="card">
+    <strong>Как настроить (один раз):</strong>
+    <ol>
+        <li>В Telegram напишите <code>@BotFather</code> → <code>/newbot</code>, получите <strong>токен</strong>.</li>
+        <li>На Render добавьте переменную <code>TELEGRAM_BOT_TOKEN</code> = этот токен, сохраните (передеплой).</li>
+        <li>Откройте своего бота в Telegram и нажмите <strong>Start</strong> (или напишите ему любое сообщение).</li>
+        <li>Обновите эту страницу — ниже появится ваш <span class="id">chat_id</span>.</li>
+        <li>На Render добавьте <code>TELEGRAM_CHAT_ID</code> = этот id, сохраните.</li>
+        <li>Вернитесь сюда и нажмите «Отправить тест».</li>
+    </ol>
+</div>
+
+<div class="card">
+    <strong>Кто писал боту</strong> (отсюда возьмите chat_id):
+    {% if chats_error %}
+        <div class="bad">{{ chats_error }}</div>
+    {% elif chats %}
+        <table>
+            {% for c in chats %}<tr><td>{{ c.name or '—' }}</td><td class="id">{{ c.id }}</td></tr>{% endfor %}
+        </table>
+    {% else %}
+        <div style="opacity:.7">Пока никто не писал боту. Нажмите Start у бота и обновите страницу.</div>
+    {% endif %}
+</div>
+
+<a class="btn" href="/admin/telegram?test=1">Отправить тест</a>
+</body>
+</html>

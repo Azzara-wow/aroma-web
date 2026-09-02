@@ -16,6 +16,7 @@ import users
 import flow
 import nalichie
 import catalog
+import notify
 
 app = FastAPI()
 app.include_router(admin.router)
@@ -147,5 +148,22 @@ def order(request: Request, payload: OrderIn):
             status_code=503,
         )
     ok = res_z.get("ok") and res_n.get("ok")
+
+    # Уведомление организатору о заказе ЗАКУПКИ (в Telegram, в фоне).
+    # У закупки нет простой суммы (цена по ступеням), поэтому объём и новый итог.
+    if res_z.get("changes"):
+        lines = [f"• {c['aroma']} — +{c['added']} мл (стало {c['to']})" for c in res_z["changes"]]
+        notify.send("🛍 Закупка — новый заказ\n"
+                    f"{user['name']} ({user['phone']})\n" + "\n".join(lines))
+
+    # Уведомление организатору о заказе НАЛИЧИЯ (в Telegram, в фоне).
+    if res_n.get("changes"):
+        lines = [f"• {c['item']} — {c['added']} ({c['sum']} ₽)" for c in res_n["changes"]]
+        total = sum(c.get("sum", 0) for c in res_n["changes"])
+        notify.send("🛒 Наличие — новый заказ\n"
+                    f"{user['name']} ({user['phone']})\n"
+                    + "\n".join(lines)
+                    + f"\nИтого: {total} ₽")
+
     return JSONResponse({"ok": ok, "zakupka": res_z, "nalichie": res_n},
                         status_code=200 if ok else 400)

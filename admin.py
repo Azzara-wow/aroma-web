@@ -20,6 +20,7 @@ import flow
 import auth
 import nalichie
 import catalog
+import notify
 
 
 # ---------- покупатель по имени (не по телефону) ----------
@@ -162,6 +163,23 @@ def admin_page(request: Request):
             "users_list": _buyer_options(),
         },
     )
+
+
+@router.get("/admin/telegram", response_class=HTMLResponse)
+def admin_telegram(request: Request):
+    if not _require_admin(request):
+        return RedirectResponse("/login", status_code=303)
+    test_res = notify.test() if request.query_params.get("test") else None
+    info = notify.recent_chats()
+    return templates.TemplateResponse("admin_telegram.html", {
+        "request": request,
+        "token_set": bool(notify.TG_TOKEN),
+        "chat_set": bool(notify.TG_CHAT),
+        "current": notify.TG_CHAT,
+        "chats": info.get("chats", []),
+        "chats_error": info.get("error"),
+        "test_res": test_res,
+    })
 
 
 @router.get("/admin/current")
