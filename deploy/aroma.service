@@ -1,0 +1,14 @@
+[Unit]
+Description=aroma_web (LUZI)
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/aroma-web
+EnvironmentFile=/etc/aroma-web.env
+ExecStart=/opt/aroma-web/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=always
+RestartSec=3
+User=root
+
+[Install]
+WantedBy=multi-user.target
