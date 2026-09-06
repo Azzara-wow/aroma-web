@@ -102,15 +102,23 @@ def worksheet_by_title(title: str, url: str = None):
 
 
 def get_or_create_ws(title: str, header: list, url: str = None):
-    """Лист по имени; если его нет — создаём с шапкой. Результат кэшируется."""
+    """
+    Лист по имени БЕЗ учёта регистра/пробелов (в Google имена листов
+    регистронезависимы: "поток" == "Поток"). Создаём только если реально нет —
+    иначе add_worksheet упадёт конфликтом имён.
+    """
     sid = spreadsheet_id(url)
     key = (sid, title)
     if key in _ws_title:
         return _ws_title[key]
     book = open_book(url)
-    try:
-        ws = book.worksheet(title)
-    except gspread.WorksheetNotFound:
+    want = title.strip().lower()
+    ws = None
+    for w in book.worksheets():
+        if w.title.strip().lower() == want:
+            ws = w
+            break
+    if ws is None:
         ws = book.add_worksheet(title=title, rows=1000, cols=max(len(header), 1))
         if header:
             ws.update(f"A1:{col_a1(len(header) - 1)}1", [header])
