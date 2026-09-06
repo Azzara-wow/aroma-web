@@ -24,10 +24,31 @@ import users
 # Ссылка на книгу склада (id из неё же используется для кэша подключения).
 NALICHIE_URL = "https://docs.google.com/spreadsheets/d/10-tDVQSOsMi099qbX21RdwNC5IoD35IfcX7GMpgTNKY/edit"
 
-# Листы адресуем по gid (стабильно, регистр названия не важен).
-ASSORT_GID = 2027082947   # ассортимент наличия ("Лист1")
-FLOW_GID = 590096728      # поток заказов ("заказы")
+# Листы адресуем ПО НАЗВАНИЮ (без учёта регистра). Организатор иногда двигает/
+# копирует листы — gid при этом меняется, а название держит. Точное имя не совпадёт
+# с копией вроде "заказы (копия) 1", поэтому берётся именно рабочий лист.
+ASSORT_TITLES = {"лист1"}      # ассортимент наличия
+FLOW_TITLES = {"заказы"}       # поток заказов
 STATUS_DONE = "выполнено"
+
+_ws_cache = {}
+
+
+def _sheet(kind):
+    """Рабочий лист Наличия по названию (кэш на процесс). kind: 'assort' | 'flow'."""
+    if kind in _ws_cache:
+        return _ws_cache[kind]
+    titles = ASSORT_TITLES if kind == "assort" else FLOW_TITLES
+    for w in sheets.open_book(NALICHIE_URL).worksheets():
+        if core.norm(w.title).lower() in titles:
+            _ws_cache[kind] = w
+            return w
+    import gspread
+    raise gspread.WorksheetNotFound(f"лист {titles} не найден в книге Наличия")
+
+
+def reset_ws_cache():
+    _ws_cache.clear()
 
 # --- синонимы заголовков ---
 A_NAME = ["наличие", "наименование", "товар", "название"]
@@ -65,7 +86,7 @@ def _cell(row, idx):
 # ---------- чтение листов ----------
 
 def _assort_rows():
-    ws = sheets.worksheet_by_gid(ASSORT_GID, NALICHIE_URL)
+    ws = _sheet("assort")
     values = ws.get_all_values()
     header = values[0] if values else []
     ci = {"name": _resolve(header, A_NAME), "stock": _resolve(header, A_STOCK),
@@ -74,7 +95,7 @@ def _assort_rows():
 
 
 def _flow_rows():
-    ws = sheets.worksheet_by_gid(FLOW_GID, NALICHIE_URL)
+    ws = _sheet("flow")
     values = ws.get_all_values()
     header = values[0] if values else []
     ci = {"date": _resolve(header, F_DATE), "phone": _resolve(header, F_PHONE),
@@ -275,7 +296,7 @@ def add_batch(phone_raw, name, additions: dict, status="", enforce_stock=True):
         changes.append({"item": info["name"], "added": add, "sum": summ})
 
     if rows:
-        sheets.worksheet_by_gid(FLOW_GID, NALICHIE_URL).append_rows(
+        _sheet("flow").append_rows(
             rows, value_input_option="USER_ENTERED")
     return {"ok": True, "changes": changes, "rejected": rejected}
 
@@ -302,7 +323,7 @@ def add_item(name, stock, per_ml, show=""):
     mapping = {"name": name, "stock": int(core.to_num(stock)) or "",
                "perml": core.to_num(per_ml) or "", "show": core.to_num(show) or ""}
     row = _row_for(aheader, aci, mapping)
-    sheets.worksheet_by_gid(ASSORT_GID, NALICHIE_URL).append_row(
+    _sheet("assort").append_row(
         row, value_input_option="USER_ENTERED")
     return {"ok": True, "name": name}
 
@@ -318,7 +339,7 @@ def _append_flow(phone, name, item, qty, direction, status, per_ml, show):
     mapping = {"date": stamp, "phone": phone, "status": status,
                "iname": (name or "").strip(), "item": item, "qty": qty,
                "perml": per_ml or "", "show": show or "", "sum": summ, "dir": direction}
-    sheets.worksheet_by_gid(FLOW_GID, NALICHIE_URL).append_row(
+    _sheet("flow").append_row(
         _row_for(fheader, fci, mapping), value_input_option="USER_ENTERED")
     return summ
 

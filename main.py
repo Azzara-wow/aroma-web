@@ -17,6 +17,7 @@ import flow
 import nalichie
 import catalog
 import notify
+import info
 
 app = FastAPI()
 app.include_router(admin.router)
@@ -65,13 +66,14 @@ def index(request: Request):
         # Отдаём ВЕСЬ видимый список; вкладки и «Моё» фильтрует браузер (быстро).
         visible = [x for x in all_rows if x["status"] not in ("hide", "сервис")]
 
+        # Вкладки ЗАКУПКИ (под строкой поиска).
         base_tabs = ["Общее", "Духи", "Отдушки", "База", "Разное", "Флаконы"]
         present = {x["category"] for x in all_rows}
-        active_tabs = [t for t in base_tabs if t == "Общее" or t in present]
-
-        has_dobor = any(x["is_dobor"] for x in all_rows)
-        if has_dobor:
-            active_tabs.append("Добор")
+        cat_tabs = [t for t in base_tabs if t == "Общее" or t in present]
+        if any(x["is_new"] for x in all_rows):
+            cat_tabs.append("Новинки")
+        if any(x["is_dobor"] for x in all_rows):
+            cat_tabs.append("Добор")
 
         # Наличие (вторая книга). Если недоступна — витрина закупки всё равно грузится.
         nalichie_items, nal_mine_sum = [], 0
@@ -79,17 +81,20 @@ def index(request: Request):
             nalichie_items, nal_mine_sum = nalichie.view(user["phone"] if is_auth else None)
         except Exception:
             traceback.print_exc()
-        if nalichie_items:
-            active_tabs.append("Наличие")
 
-        # Полный каталог «Ассортимент» (view-only). Не критичен для витрины.
+        # Полный каталог «Ассортимент» (view-only). Не критичен.
         catalog_items = []
         try:
             catalog_items = catalog.catalog()
         except Exception:
             traceback.print_exc()
-        if catalog_items:
-            active_tabs.append("Ассортимент")
+
+        # Информация (лист «Информация» в книге закупки). Нет листа — нет вкладки.
+        info_items = []
+        try:
+            info_items = info.items()
+        except Exception:
+            traceback.print_exc()
 
         return templates.TemplateResponse(
             "index.html",
@@ -99,10 +104,14 @@ def index(request: Request):
                 "nalichie": nalichie_items,
                 "nal_mine_sum": nal_mine_sum,
                 "catalog_items": catalog_items,
+                "info_items": info_items,
                 "user_name": user["name"] if is_auth else "",
                 "is_auth": is_auth,
                 "tab": tab,
-                "tabs": active_tabs,
+                "cat_tabs": cat_tabs,
+                "has_nalichie": bool(nalichie_items),
+                "has_catalog": bool(catalog_items),
+                "has_info": bool(info_items),
                 "is_admin": users.is_admin(user) if is_auth else False,
             },
         )

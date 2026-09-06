@@ -26,7 +26,7 @@ from urllib.parse import urlparse, parse_qs
 
 # === НАСТРОЙКА ЗАКУПКИ (общая для морды и админки) ===
 # Один файл читают обе стороны — значит ссылка одна, здесь.
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1hNU88oApt9F3JNJW3_wgGG8NJEUejcDvO518toSxdys/edit?gid=0#gid=0"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/14-QBelupnGSBsYlF96naacCWdKAVbYl6TttWbd-nejQ/edit?gid=0#gid=0"
 
 # Границы ступеней по категориям — какой объём в какую ступень попадает.
 # Нижние границы трёх ступеней; ступень включается с этого объёма. None = ступени нет.
@@ -235,6 +235,15 @@ def prepare_dataframe(df: pd.DataFrame, user_name: str = ""):
     cols = buyer_columns(df)
     buyer_names = [n for (_, n) in cols if n.lower() != BUYERS_ANCHOR]
 
+    # Столбец "Примечание" (по названию шапки, позиция свободная). "новинка" -> вкладка Новинки.
+    note_col = None
+    if df.shape[0]:
+        header = df.iloc[0]
+        for pos in range(df.shape[1]):
+            if norm(header.iat[pos]).lower() in ("примечание", "заметка", "примечания"):
+                note_col = pos
+                break
+
     user_col_pos = None
     if user_name and user_name.strip():
         target = user_name.strip().lower()
@@ -281,6 +290,8 @@ def prepare_dataframe(df: pd.DataFrame, user_name: str = ""):
         if user_col_pos is not None:
             ordered_ml = int(to_num(cell(df, r, user_col_pos)))
 
+        note = norm(cell(df, r, note_col)) if note_col is not None else ""
+
         rows.append({
             "row_index": r,                 # позиция строки в файле (пригодится админке)
             "aroma_name": name,
@@ -293,6 +304,8 @@ def prepare_dataframe(df: pd.DataFrame, user_name: str = ""):
             "collected": collected,
             "remaining": target,
             "ordered_ml": ordered_ml,
+            "note": note,
+            "is_new": "новинка" in note.lower(),
         })
 
     return rows, buyer_names

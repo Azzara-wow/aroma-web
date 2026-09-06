@@ -56,6 +56,17 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
 .tab.active{background:var(--green); color:#fbf6ec; border-color:var(--green)}
 .mode{color:var(--clay); border-color:var(--clay-soft)}
 .mode.active{background:var(--clay); color:#fff; border-color:var(--clay)}
+.tabs.top{margin-bottom:10px; padding-bottom:10px; border-bottom:1px dashed var(--line)}
+.tab.special{color:var(--clay-deep); border-color:var(--clay-soft); background:var(--cream)}
+.tab.special.active{background:var(--clay); color:#fff; border-color:var(--clay)}
+.new-badge{font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#fff;
+  background:var(--clay); padding:1px 7px; border-radius:999px; vertical-align:2px; margin-left:5px; font-family:var(--sans)}
+#info-block{padding:10px 18px 24px}
+.info-card{display:block; background:var(--panel); border:1px solid var(--line); border-radius:10px;
+  padding:14px 16px; margin-bottom:10px; text-decoration:none}
+.info-title{font-family:var(--serif); font-size:16px; color:var(--green); font-weight:600}
+.info-desc{font-size:13.5px; color:var(--ink); margin-top:4px; line-height:1.5}
+.info-url{font-size:12.5px; color:var(--clay-deep); margin-top:6px; word-break:break-all}
 
 .seclabel{font-family:var(--serif); font-size:16px; color:var(--green); font-weight:600;
   padding:15px 18px 2px; display:flex; align-items:baseline; gap:8px}
@@ -144,12 +155,19 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
   </div>
 
   <div class="controls">
+    {% if has_nalichie or has_catalog or has_info %}
+    <div class="tabs top">
+      {% if has_nalichie %}<button class="tab special" data-tab="Наличие">Наличие</button>{% endif %}
+      {% if has_catalog %}<button class="tab special" data-tab="Ассортимент">Ассортимент</button>{% endif %}
+      {% if has_info %}<button class="tab special" data-tab="Информация">ℹ️ Информация</button>{% endif %}
+    </div>
+    {% endif %}
     <div class="search">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.2-3.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      <input type="text" id="search" placeholder="Поиск по названию">
+      <input type="text" id="search" placeholder="Поиск по закупке">
     </div>
-    <div class="tabs" id="tabs">
-      {% for t in tabs %}<button class="tab{% if t == 'Общее' %} active{% endif %}" data-tab="{{ t }}">{{ t }}</button>{% endfor %}
+    <div class="tabs bottom" id="tabs">
+      {% for t in cat_tabs %}<button class="tab{% if t == 'Общее' %} active{% endif %}" data-tab="{{ t }}">{{ t }}</button>{% endfor %}
       {% if is_auth %}<button class="mode" data-mode="mine">Моё</button>{% endif %}
     </div>
   </div>
@@ -165,10 +183,11 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
         data-name="{{ aroma.aroma_name }}"
         data-category="{{ aroma.category }}"
         data-dobor="{{ 1 if aroma.is_dobor else 0 }}"
+        data-new="{{ 1 if aroma.is_new else 0 }}"
         data-ordered="{{ aroma.ordered_ml }}">
       <div class="head" onclick="toggleItem(this)">
         <div class="grow">
-          <div class="aname">{{ aroma.aroma_name }}</div>
+          <div class="aname">{{ aroma.aroma_name }}{% if aroma.is_new %} <span class="new-badge">новинка</span>{% endif %}</div>
           <div class="meta">
             {%- if aroma.category == 'Духи' %}Пол: {{ aroma.view or '—' }} · Духи
             {%- else %}{{ aroma.category }}{% endif -%}
@@ -273,6 +292,23 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
   {% endfor %}
   </ul>
 
+  <div id="info-block" hidden>
+    {% for it in info_items %}
+      {% if it.url %}
+      <a class="info-card" href="{{ it.url }}" target="_blank" rel="noopener">
+        <div class="info-title">{{ it.title }}</div>
+        {% if it.desc %}<div class="info-desc">{{ it.desc }}</div>{% endif %}
+        <div class="info-url">{{ it.url }}</div>
+      </a>
+      {% else %}
+      <div class="info-card">
+        <div class="info-title">{{ it.title }}</div>
+        {% if it.desc %}<div class="info-desc">{{ it.desc }}</div>{% endif %}
+      </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+
   {% if is_auth %}
   <div id="preview">
     <div class="pv-title">Добавить в заказ</div>
@@ -315,23 +351,31 @@ function intVal(inp){
 
 function applyView(){
   const q = (document.getElementById("search").value || "").trim().toLowerCase();
+  const infoTab = (curMode !== "mine" && curTab === "Информация");
+  const infoBlock = document.getElementById("info-block");
+  if (infoBlock) infoBlock.hidden = !infoTab;
+
   document.querySelectorAll("#list .item").forEach(item => {
     const name = (item.dataset.name || "").toLowerCase();
     const cat = item.dataset.category || "";
     const dobor = item.dataset.dobor === "1";
+    const isNew = item.dataset.new === "1";
     const ordered = parseInt(item.dataset.ordered || "0", 10) || 0;
     const source = item.dataset.source || "zakupka";
     let visible;
-    if (curMode === "mine") visible = ordered > 0;
+    if (infoTab) visible = false;
+    else if (curMode === "mine") visible = ordered > 0;
     else if (curTab === "Наличие") visible = source === "nalichie";
     else if (curTab === "Ассортимент") visible = source === "catalog";
     else if (source !== "zakupka") visible = false;   // наличие/каталог — только на своих вкладках
+    else if (curTab === "Новинки") visible = isNew && !dobor;
     else if (curTab === "Общее") visible = !dobor;
     else if (curTab === "Добор") visible = dobor;
     else visible = (cat === curTab) && !dobor;
     if (q) visible = visible && name.includes(q);
     item.style.display = visible ? "" : "none";
   });
+
   document.getElementById("heading-main").textContent =
     (curMode === "mine") ? "Мои заказы" : (curTab === "Общее") ? "Все ароматы" : curTab;
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", curMode !== "mine" && b.dataset.tab === curTab));
