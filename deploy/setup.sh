@@ -42,7 +42,7 @@ else
 fi
 sleep 2
 echo -n "   /health -> "
-curl -s http://127.0.0.1:8000/health || echo "(приложение не ответило: journalctl -u aroma -n 30)"
+curl -s http://127.0.0.1:8001/health || echo "(приложение не ответило: journalctl -u aroma -n 30)"
 echo
 echo "Готово. Открой http://$DOMAIN (после того как DNS укажет на сервер)."
 echo "HTTPS включим отдельно: bash deploy/https.sh $DOMAIN"
