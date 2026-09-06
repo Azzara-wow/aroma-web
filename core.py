@@ -26,7 +26,7 @@ from urllib.parse import urlparse, parse_qs
 
 # === НАСТРОЙКА ЗАКУПКИ (общая для морды и админки) ===
 # Один файл читают обе стороны — значит ссылка одна, здесь.
-SHEET_URL = "https://docs.google.com/spreadsheets/d/14-QBelupnGSBsYlF96naacCWdKAVbYl6TttWbd-nejQ/edit?gid=0#gid=0"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1yxoDBK_2YRF7YwgD2AWiW2xgDetOhMSdd54RWQbvxww/edit?gid=0#gid=0"
 
 # Границы ступеней по категориям — какой объём в какую ступень попадает.
 # Нижние границы трёх ступеней; ступень включается с этого объёма. None = ступени нет.
