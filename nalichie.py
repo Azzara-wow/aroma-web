@@ -230,10 +230,13 @@ def board(phone_raw):
 
 # ---------- запись заказа (с проверкой остатка) ----------
 
-def add_batch(phone_raw, name, additions: dict, status=""):
+def add_batch(phone_raw, name, additions: dict, status="", enforce_stock=True):
     """
     Добавить в поток заказы покупателя по складу (только прибавление).
-    additions: {товар: сколько_добавить}. Проверяем остаток: нельзя больше available.
+    additions: {товар: сколько_добавить}.
+    enforce_stock=True (витрина покупателя): нельзя заказать больше available.
+    enforce_stock=False (организатор): лимит остатка не проверяем — организатор
+    записывает реальный заказ и сам пополнит склад (остаток может уйти в минус).
     status="" (обычный) или "выполнено" (организатор сразу закрывает).
     Возвращает {"ok", "changes":[{item,added,sum}], "rejected":[{item,reason}]}.
     """
@@ -258,7 +261,7 @@ def add_batch(phone_raw, name, additions: dict, status=""):
         if info is None:
             rejected.append({"item": item_name, "reason": "нет в складе"})
             continue
-        if add > info["available"]:
+        if enforce_stock and add > info["available"]:
             rejected.append({"item": item_name,
                              "reason": f"на складе только {int(info['available'])}"})
             continue
@@ -341,8 +344,8 @@ def add_order(phone_raw, name, item, qty, done=False, direction="плюс"):
         summ = _append_flow(phone, name, name_item, q, "минус", status, per_ml, show)
         return {"ok": True, "change": {"item": name_item, "added": -q, "sum": summ}}
 
-    # плюс — через add_batch (с проверкой остатка)
-    res = add_batch(phone_raw, name, {item: qty}, status=status)
+    # плюс — через add_batch, но БЕЗ лимита остатка (организатор пишет реальный заказ)
+    res = add_batch(phone_raw, name, {item: qty}, status=status, enforce_stock=False)
     if not res.get("ok"):
         return res
     if res["rejected"]:
