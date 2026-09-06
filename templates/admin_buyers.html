@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Покупатели — организатор</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {font-family: system-ui, -apple-system, sans-serif; margin:0; padding:16px; background:#0e1117; color:#fff; max-width:640px;}
+        h1 {font-size:18px; margin:0 0 12px;}
+        .nav {margin-bottom:14px; font-size:13px;} .nav a {color:#8ab4f7; text-decoration:none;}
+        label {display:block; font-size:13px; opacity:0.7; margin:12px 0 4px;}
+        input[type=text] {width:100%; padding:12px; font-size:16px; border-radius:8px; border:none; box-sizing:border-box;}
+        .hint {font-size:12px; opacity:0.6; margin-top:6px;}
+        button {width:100%; margin-top:14px; padding:14px; border-radius:8px; border:none; font-size:16px; font-weight:600; cursor:pointer; color:#fff; background:#2f6f3e;}
+        .result {margin:14px 0; padding:12px; border-radius:8px; font-size:15px;}
+        .result.ok {background:rgba(80,180,100,0.18);}
+        .result.err {background:rgba(200,80,80,0.20);}
+        .card {background:#1a1d23; border-radius:8px; padding:6px 0; margin-top:18px;}
+        h2 {font-size:14px; opacity:0.75; margin:20px 0 6px;}
+        table {width:100%; border-collapse:collapse; font-size:14px;}
+        td, th {text-align:left; padding:9px 12px; border-bottom:1px solid #22262e;}
+        th {font-size:12px; opacity:0.6; font-weight:600;}
+        td.ph {font-variant-numeric:tabular-nums; opacity:0.85;}
+        .tag {font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px;}
+        .tag.code {background:rgba(80,180,100,0.18); color:#8fd6a0;}
+        .tag.nocode {background:rgba(200,150,60,0.18); color:#e0b070;}
+        .tag.org {background:rgba(120,110,220,0.22); color:#b6b0f0;}
+    </style>
+</head>
+<body>
+
+<div class="nav"><a href="/admin">← в организаторскую</a></div>
+<h1>Покупатели</h1>
+
+{% if result %}
+    {% if result.ok %}
+        <div class="result ok">Добавлен ✓ <strong>{{ result.name }}</strong> ({{ result.phone }}). Код он задаст сам при первом входе.</div>
+    {% else %}
+        <div class="result err">⚠ {{ result.msg }}</div>
+    {% endif %}
+{% endif %}
+
+<form method="post" action="/admin/buyers/add" autocomplete="off">
+    <label>Телефон</label>
+    <input type="text" name="phone" inputmode="numeric" placeholder="7XXXXXXXXXX" required>
+    <label>Имя</label>
+    <input type="text" name="name" placeholder="как обращаться" required>
+    <label>Адрес / доставка (необязательно)</label>
+    <input type="text" name="address" placeholder="куда доставлять">
+    <button type="submit">Добавить покупателя</button>
+    <div class="hint">Заводим телефон и имя. Код покупатель придумает сам при первом входе на сайт.</div>
+</form>
+
+<h2>Список ({{ buyers | length }})</h2>
+{% if load_error %}
+    <div class="result err">⚠ {{ load_error }}</div>
+{% endif %}
+<div class="card">
+    <table>
+        <tr><th>Имя</th><th>Телефон</th><th>Статус</th></tr>
+        {% for b in buyers %}
+        <tr>
+            <td>{{ b.name }}</td>
+            <td class="ph">{{ b.phone }}</td>
+            <td>
+                {% if b.role == 'организатор' %}<span class="tag org">организатор</span>{% endif %}
+                {% if b.has_code %}<span class="tag code">код задан</span>{% else %}<span class="tag nocode">без кода</span>{% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+
+</body>
+</html>

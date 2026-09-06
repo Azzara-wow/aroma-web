@@ -4,9 +4,9 @@
 # кода, регистрация, вход, сброс/установка кода, правка адреса/имени.
 # Веб-слой (формы, куки, лимит попыток) — НЕ здесь, а в маршрутах.
 #
-# ПРИВАТНОСТЬ: этот лист содержит телефоны, адреса и хеши кодов. Книга на Шаге 3
-# закрыта, читаем/пишем только через сервисный аккаунт (sheets.open_book()).
-# Публичный CSV для Пользователей не используется никогда.
+# ПРИВАТНОСТЬ: телефоны, адреса и хеши кодов вынесены в ОТДЕЛЬНУЮ приватную книгу
+# «Покупатели» (USERS_URL), не в книге закупки. Читаем/пишем только через сервисный
+# аккаунт. Публичный CSV для Пользователей не используется никогда.
 #
 # КОНТРАКТ ЛИСТА (позиции, 0-индексация; шапка в строке 1):
 #   0  A — телефон (канон 7XXXXXXXXXX) — КЛЮЧ личности
@@ -30,6 +30,8 @@ from datetime import datetime
 import core
 import sheets
 
+# Пользователи живут в ОТДЕЛЬНОЙ книге «Покупатели» (не в книге закупки).
+USERS_URL = "https://docs.google.com/spreadsheets/d/15PjPHqSl6Iju41VIZOGkCMwy4kyBomr_X9F60hYwo0U/edit"
 USERS_SHEET_NAME = "Пользователи"
 
 # --- позиции столбцов ---
@@ -114,8 +116,8 @@ def verify_code(code: str, stored: str) -> bool:
 # ======================================================================
 
 def _ws():
-    """Лист 'Пользователи' (создаётся с шапкой, если его ещё нет)."""
-    return sheets.get_or_create_ws(USERS_SHEET_NAME, HEADER)
+    """Лист 'Пользователи' в книге «Покупатели» (создаётся с шапкой, если его нет)."""
+    return sheets.get_or_create_ws(USERS_SHEET_NAME, HEADER, USERS_URL)
 
 
 def _find_row(values, canon: str):
@@ -171,6 +173,49 @@ def list_users():
         name = core.norm(row[COL_NAME]) if COL_NAME < len(row) else ""
         out.append({"phone": phone, "name": name})
     return out
+
+
+def list_full():
+    """Полный список: [{phone, name, role, has_code}] — для страницы покупателей."""
+    values = _ws().get_all_values()
+    out = []
+    for r in range(1, len(values)):
+        row = values[r]
+        phone = normalize_phone(row[COL_PHONE] if COL_PHONE < len(row) else "")
+        if not valid_phone(phone):
+            continue
+        code = core.norm(row[COL_CODE_HASH]) if COL_CODE_HASH < len(row) else ""
+        out.append({
+            "phone": phone,
+            "name": core.norm(row[COL_NAME]) if COL_NAME < len(row) else "",
+            "role": (core.norm(row[COL_ROLE]) if COL_ROLE < len(row) else "") or ROLE_BUYER,
+            "has_code": code.startswith("pbkdf2"),
+        })
+    out.sort(key=lambda x: x["name"].lower())
+    return out
+
+
+def add_buyer(phone_raw, name, address="", role=ROLE_BUYER):
+    """
+    Предзавести покупателя (организатором): телефон + имя, БЕЗ кода.
+    Код покупатель задаёт сам при первом входе (verify_login -> no_code -> set_code).
+    """
+    canon = normalize_phone(phone_raw)
+    if not valid_phone(canon):
+        return {"ok": False, "reason": "Телефон в формате 7XXXXXXXXXX"}
+    name = (name or "").strip()
+    if not name:
+        return {"ok": False, "reason": "Укажите имя"}
+
+    ws = _ws()
+    values = ws.get_all_values()
+    if _find_row(values, canon) is not None:
+        return {"ok": False, "reason": "Этот телефон уже есть в списке"}
+
+    stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    row = [canon, name, "", (address or "").strip(), role, stamp, ""]  # код пустой
+    ws.append_row(row, value_input_option="RAW")
+    return {"ok": True, "phone": canon, "name": name}
 
 
 # ======================================================================

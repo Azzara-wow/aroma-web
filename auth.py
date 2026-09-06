@@ -177,7 +177,7 @@ def login_post(request: Request, phone: str = Form(...), code: str = Form(...)):
                            "Телефон не найден — зарегистрируйтесь.")
     if reason == "no_code":
         return _login_page(request, "setcode", phone,
-                           "Код сброшен организатором — задайте новый.")
+                           "Код ещё не задан — придумайте его.")
     # bad_code
     _record_fail(canon)
     return _login_page(request, "login", phone, "Неверный код.")

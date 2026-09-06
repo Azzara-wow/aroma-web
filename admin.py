@@ -165,6 +165,42 @@ def admin_page(request: Request):
     )
 
 
+@router.get("/admin/buyers", response_class=HTMLResponse)
+def admin_buyers(request: Request):
+    if not _require_admin(request):
+        return RedirectResponse("/login", status_code=303)
+    return _render_buyers(request)
+
+
+def _render_buyers(request, **extra):
+    try:
+        buyers = users.list_full()
+    except Exception as e:
+        buyers = []
+        extra.setdefault("load_error", f"{type(e).__name__}: {e}")
+    ctx = {"request": request, "buyers": buyers}
+    ctx.update(extra)
+    return templates.TemplateResponse("admin_buyers.html", ctx)
+
+
+@router.post("/admin/buyers/add", response_class=HTMLResponse)
+def admin_buyers_add(
+    request: Request,
+    phone: str = Form(...),
+    name: str = Form(...),
+    address: str = Form(""),
+):
+    if not _require_admin(request):
+        return RedirectResponse("/login", status_code=303)
+    try:
+        res = users.add_buyer(phone, name, address)
+        result = ({"ok": True, "name": res["name"], "phone": res["phone"]}
+                  if res.get("ok") else {"ok": False, "msg": res.get("reason", "ошибка")})
+    except Exception as e:
+        result = {"ok": False, "msg": f"{type(e).__name__}: {e}"}
+    return _render_buyers(request, result=result)
+
+
 @router.get("/admin/telegram", response_class=HTMLResponse)
 def admin_telegram(request: Request):
     if not _require_admin(request):
