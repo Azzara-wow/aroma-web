@@ -355,6 +355,29 @@ function intVal(inp){
   return (isNaN(n) || n < 0) ? 0 : n;
 }
 
+// --- Черновик заказа: сохраняем введённое в браузере, чтобы не пропадало ---
+function draftKey(inp){ return "luzi_draft:" + (inp.dataset.source || "zakupka") + ":" + inp.dataset.name; }
+function saveDraft(inp){
+  try {
+    const v = intVal(inp);
+    if (v > 0) localStorage.setItem(draftKey(inp), String(v));
+    else localStorage.removeItem(draftKey(inp));
+  } catch(e){}
+}
+function restoreDrafts(){
+  try {
+    document.querySelectorAll(".amount-input").forEach(inp => {
+      const v = localStorage.getItem(draftKey(inp));
+      if (v && parseInt(v, 10) > 0) inp.value = v;
+    });
+  } catch(e){}
+}
+function clearAllDrafts(){
+  try {
+    document.querySelectorAll(".amount-input").forEach(inp => localStorage.removeItem(draftKey(inp)));
+  } catch(e){}
+}
+
 function applyView(){
   const q = (document.getElementById("search").value || "").trim().toLowerCase();
   const infoTab = (curMode !== "mine" && curTab === "Информация");
@@ -423,6 +446,7 @@ function refreshPreview(){
 }
 function resetInputs(){
   document.querySelectorAll(".amount-input").forEach(inp => { inp.value = ""; });
+  clearAllDrafts();
   refreshPreview();
   showToast("Очищено");
 }
@@ -444,6 +468,14 @@ function sendOrder(){
       if (!res) return;
       const rej = (res.nalichie && res.nalichie.rejected) || [];
       if (res.ok){
+        // чистим черновик у успешно добавленных (отклонённые по остатку оставляем)
+        const rejNames = new Set(rej.map(r => (r.item || "").toLowerCase()));
+        try {
+          document.querySelectorAll(".amount-input").forEach(inp => {
+            if (intVal(inp) > 0 && !rejNames.has((inp.dataset.name || "").toLowerCase()))
+              localStorage.removeItem(draftKey(inp));
+          });
+        } catch(e){}
         showToast(rej.length ? (rej[0].item + ": " + rej[0].reason) : "Заказ создан ✓");
         setTimeout(() => location.reload(), 1000);
       } else {
@@ -459,10 +491,12 @@ document.addEventListener("DOMContentLoaded", () => {
     b.addEventListener("click", () => { curMode = "category"; curTab = b.dataset.tab; applyView(); }));
   document.querySelectorAll(".mode").forEach(b =>
     b.addEventListener("click", () => { curMode = "mine"; applyView(); }));
-  document.querySelectorAll(".amount-input").forEach(inp => inp.addEventListener("input", refreshPreview));
+  document.querySelectorAll(".amount-input").forEach(inp =>
+    inp.addEventListener("input", () => { saveDraft(inp); refreshPreview(); }));
   const search = document.getElementById("search");
   search.addEventListener("input", applyView);
   search.addEventListener("keydown", e => { if (e.key === "Enter") e.preventDefault(); });
+  restoreDrafts();   // вернуть незавершённый черновик
   applyView();
   refreshPreview();
 });

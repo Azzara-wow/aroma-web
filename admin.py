@@ -105,12 +105,20 @@ def build_invoices():
         }
 
     orders = flow.net_orders()  # phone -> {"name", "aromas": {аромат: мл}}
+
+    # Актуальные имена из Пользователей (динамически): имя в Потоке — «снимок» на
+    # момент заказа, а тут берём текущее по телефону. Fallback — снимок, потом телефон.
+    try:
+        current_names = {u["phone"]: u["name"] for u in users.list_users() if u["name"]}
+    except Exception:
+        current_names = {}
+
     details = []
     export_rows = []
     all_problems = []
 
     for phone, u in orders.items():
-        buyer = u["name"] or phone
+        buyer = current_names.get(phone) or u["name"] or phone
         d = {"buyer": buyer, "phone": phone, "positions": [], "total": 0, "problems": []}
         for aroma, vol in u["aromas"].items():
             meta = info.get(aroma.lower())
@@ -139,7 +147,7 @@ def build_invoices():
             details.append(d)
 
     details.sort(key=lambda d: d["buyer"].lower())
-    summary = [{"buyer": d["buyer"], "total": d["total"]} for d in details]
+    summary = [{"buyer": d["buyer"], "phone": d["phone"], "total": d["total"]} for d in details]
     grand_total = sum(d["total"] for d in details)
 
     return {

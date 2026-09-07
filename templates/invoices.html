@@ -13,6 +13,7 @@
         th, td {text-align:left; padding:7px 8px; border-bottom:1px solid #22252c;}
         th {opacity:0.6; font-weight:600; font-size:12px;}
         td.num, th.num {text-align:right;}
+        td.ph {opacity:0.7; font-variant-numeric:tabular-nums; white-space:nowrap;}
         .grand {font-size:16px; font-weight:700; color:#8ab4f7; margin-top:8px;}
         .buyer-block {margin:14px 0; padding:12px; background:#14171d; border-radius:8px;}
         .buyer-block h3 {font-size:15px; margin:0 0 8px;}
@@ -53,9 +54,9 @@
 
     <h2>Сводная: кто сколько платит</h2>
     <table>
-        <tr><th>Покупатель</th><th class="num">Сумма, ₽</th></tr>
+        <tr><th>Покупатель</th><th>Телефон</th><th class="num">Сумма, ₽</th></tr>
         {% for s in data.summary %}
-        <tr><td>{{ s.buyer }}</td><td class="num">{{ s.total }}</td></tr>
+        <tr><td>{{ s.buyer }}</td><td class="ph">{{ s.phone }}</td><td class="num">{{ s.total }}</td></tr>
         {% endfor %}
     </table>
     <div class="grand">Итого по закупке: {{ data.grand_total }} ₽</div>
@@ -64,8 +65,8 @@
     <input type="text" id="filter" placeholder="Фильтр по фамилии — начни печатать">
     <div id="details">
         {% for d in data.details %}
-        <div class="buyer-block" data-buyer="{{ d.buyer|lower }}">
-            <h3>{{ d.buyer }}</h3>
+        <div class="buyer-block" data-buyer="{{ d.buyer|lower }} {{ d.phone }}">
+            <h3>{{ d.buyer }} <span style="opacity:.6; font-weight:400; font-size:13px;">{{ d.phone }}</span></h3>
             <table>
                 <tr><th>Аромат</th><th class="num">Объём</th><th class="num">Цена/мл</th><th class="num">Сумма</th></tr>
                 {% for p in d.positions %}
