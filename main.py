@@ -176,7 +176,7 @@ def order(request: Request, payload: OrderIn):
     # Уведомление организатору о заказе ЗАКУПКИ (в Telegram, в фоне).
     # У закупки нет простой суммы (цена по ступеням), поэтому объём и новый итог.
     if res_z.get("changes"):
-        lines = [f"• {c['aroma']} — +{c['added']} мл (стало {c['to']})" for c in res_z["changes"]]
+        lines = [f"• {c['aroma']} — +{c['added']} (стало {c['to']})" for c in res_z["changes"]]
         notify.send("🛍 Закупка — новый заказ\n"
                     f"{user['name']} ({user['phone']})\n" + "\n".join(lines))
 

@@ -101,6 +101,7 @@ def build_invoices():
             "name": x["aroma_name"],
             "category": x["category"],
             "per_ml": x["per_ml"],
+            "price": x["price"],   # цена за штуку — для штучных категорий (База)
         }
 
     orders = flow.net_orders()  # phone -> {"name", "aromas": {аромат: мл}}
@@ -119,7 +120,8 @@ def build_invoices():
                 d["problems"].append(prob)
                 all_problems.append(prob)
                 continue
-            calc = core.price_of_position(meta["category"], vol, meta["per_ml"])
+            calc = core.price_of_position(meta["category"], vol, meta["per_ml"],
+                                          piece_price=meta.get("price"))
             if not calc["ok"]:
                 prob = {"buyer": buyer, "aroma": meta["name"], "volume": int(vol),
                         "reason": calc["reason"]}

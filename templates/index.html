@@ -202,14 +202,14 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
           <div class="prog">
             <div class="bar {% if pct >= 80 %}near{% endif %}"><i style="width:{{ pct }}%"></i></div>
             <div class="progtxt">
-              <span>Набрано <b>{{ aroma.collected }}</b> из {{ plan }} мл</span>
+              <span>Набрано <b>{{ aroma.collected }}</b> из {{ plan }} {{ aroma.unit }}</span>
               <span>{% if aroma.collected >= plan %}собрали ✓{% elif pct >= 80 %}почти собрали!{% else %}ещё {{ aroma.remaining }}{% endif %}</span>
             </div>
           </div>
           {% elif aroma.collected > 0 %}
-          <div class="prog"><div class="progtxt"><span>Набрано <b>{{ aroma.collected }}</b> мл</span></div></div>
+          <div class="prog"><div class="progtxt"><span>Набрано <b>{{ aroma.collected }}</b> {{ aroma.unit }}</span></div></div>
           {% endif %}
-          <span class="taken" {% if aroma.ordered_ml == 0 %}style="display:none;"{% endif %}>Ты взяла: <span class="v-mine">{{ aroma.ordered_ml }}</span> мл</span>
+          <span class="taken" {% if aroma.ordered_ml == 0 %}style="display:none;"{% endif %}>Ты взяла: <span class="v-mine">{{ aroma.ordered_ml }}</span> {{ aroma.unit }}</span>
         </div>
         <div class="pricecol"><div class="price">{{ aroma.price | int }}<small> ₽</small></div></div>
       </div>

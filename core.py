@@ -37,6 +37,10 @@ STAGE_BOUNDS = {
     "Разное":  [1, None, None],
 }
 
+# Штучные категории: количество = штуки, цена — за штуку (не за мл).
+# Сумма = цена_за_штуку × количество, без ml-ступеней.
+PIECE_CATEGORIES = {"База"}
+
 # --- Позиции столбцов (0-индексация) ---
 COL_CATEGORY = 1
 COL_STATUS = 2
@@ -68,7 +72,7 @@ SECTION_WORDS = {"духи", "отдушки", "база", "разное", "фл
 SHOWCASE_LABELS = {
     "Духи":    ["Цена 10 мл", "Цена 50 мл", "Цена 100 мл"],
     "Отдушки": ["Цена 50 мл", "Цена 100 мл", "Цена 500 мл"],
-    "База":    ["Цена 500 мл", "Цена 1000 мл", "Цена"],
+    "База":    ["Цена за шт", "Цена за шт", "Цена за шт"],
 }
 
 
@@ -179,19 +183,26 @@ def stage_for_volume(category: str, volume: float):
 import math
 
 
-def price_of_position(category: str, volume: float, per_ml_list):
+def price_of_position(category: str, volume: float, per_ml_list, piece_price=None):
     """
-    Считает сумму одной позиции по грейду.
+    Считает сумму одной позиции.
     per_ml_list — [цена_за_мл_ст1, ст2, ст3] (столбцы I/J/K).
+    piece_price — цена за штуку (для штучных категорий, напр. База).
     Возвращает dict:
       ok=True  -> {ok, stage, per_ml, amount}
-      ok=False -> {ok, reason}   (проблемная позиция: нет цены в нужном грейде)
-    Правило: сумма = ceil(цена_за_мл * объём). Округление ВВЕРХ до рубля.
-    Пустая/0 цена в грейде -> ступени нет: пробуем ближайшую доступную СНИЗУ,
-      если и её нет -> проблема (по договорённости: помечаем, не считаем молча).
+      ok=False -> {ok, reason}   (проблемная позиция)
+    Штучные категории (PIECE_CATEGORIES): сумма = ceil(цена_за_штуку × количество).
+    Остальные: сумма = ceil(цена_за_мл × объём) по ступеням.
     """
     if volume <= 0:
         return {"ok": False, "reason": "нулевой объём"}
+
+    # Штучный товар (База): считаем поштучно, без ml-ступеней.
+    if category in PIECE_CATEGORIES:
+        pp = piece_price if (piece_price and piece_price > 0) else 0
+        if pp <= 0:
+            return {"ok": False, "reason": f"нет цены за штуку ({category})"}
+        return {"ok": True, "stage": None, "per_ml": pp, "amount": math.ceil(pp * volume)}
 
     stage = stage_for_volume(category, volume)
     if stage is None:
@@ -306,6 +317,7 @@ def prepare_dataframe(df: pd.DataFrame, user_name: str = ""):
             "ordered_ml": ordered_ml,
             "note": note,
             "is_new": "новинка" in note.lower(),
+            "unit": "мл" if category in ("Духи", "Отдушки") else "шт",
         })
 
     return rows, buyer_names
