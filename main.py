@@ -3,7 +3,7 @@
 # (flow), а не из матрицы. Заказ уходит прямо в Поток (POST /order), без ТГ.
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -35,6 +35,21 @@ templates = Jinja2Templates(directory="templates")
 @app.head("/health")
 def health(request: Request):
     return {"status": "ok"}
+
+
+# Service worker отдаём из КОРНЯ (scope "/"), чтобы он контролировал весь сайт —
+# иначе установка PWA не проходит. Ничего не кэшируем (данные динамические):
+# обработчик fetch есть только для критерия «устанавливаемости».
+_SW_JS = (
+    "self.addEventListener('install', e => self.skipWaiting());\n"
+    "self.addEventListener('activate', e => self.clients.claim());\n"
+    "self.addEventListener('fetch', e => {});\n"
+)
+
+
+@app.get("/sw.js")
+def service_worker():
+    return Response(content=_SW_JS, media_type="application/javascript")
 
 
 @app.head("/")
