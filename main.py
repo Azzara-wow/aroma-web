@@ -2,12 +2,15 @@
 # Личность — из куки (auth.current_user), не из URL. Данные заказов — из Потока
 # (flow), а не из матрицы. Заказ уходит прямо в Поток (POST /order), без ТГ.
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 import traceback
+
+from yandex_delivery import YandexDeliveryClient
+from yandex_delivery.errors import YandexDeliveryError
 
 import core
 import admin
@@ -128,6 +131,16 @@ def index(request: Request):
                 "has_catalog": bool(catalog_items),
                 "has_info": bool(info_items),
                 "is_admin": users.is_admin(user) if is_auth else False,
+                # данные доставки: плашка горит, пока не заполнено (гостю не показываем)
+                "delivery_complete": (user.get("delivery_complete", False) if is_auth else True),
+                "deliv": {
+                    "last_name": user.get("last_name", ""),
+                    "first_name": user.get("first_name", ""),
+                    "patronymic": user.get("patronymic", ""),
+                    "city": user.get("city", ""),
+                    "pvz_address": user.get("pvz_address", ""),
+                    "pvz_id": user.get("pvz_id", ""),
+                } if is_auth else {},
             },
         )
 
@@ -144,6 +157,47 @@ def index(request: Request):
             ),
             status_code=503,
         )
+
+
+@app.get("/pvz")
+def pvz_search(request: Request, city: str = ""):
+    """JSON-поиск ПВЗ Яндекса по городу — для пикера в форме доставки."""
+    city = (city or "").strip()
+    if not city:
+        return JSONResponse({"ok": False, "error": "Укажите город"})
+    try:
+        c = YandexDeliveryClient()  # окружение/токен из env (по умолчанию тест)
+        gid = c.geo_id(city)
+        points = c.list_pickup_points(geo_id=gid)
+        data = [{"id": p.id, "name": p.name, "address": p.full_address} for p in points[:40]]
+        return JSONResponse({"ok": True, "env": c.env, "count": len(points), "points": data})
+    except YandexDeliveryError as e:
+        return JSONResponse({"ok": False, "error": str(e)})
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse({"ok": False, "error": str(e)})
+
+
+@app.post("/delivery")
+def save_delivery(
+    request: Request,
+    last_name: str = Form(""),
+    first_name: str = Form(""),
+    patronymic: str = Form(""),
+    city: str = Form(""),
+    pvz_address: str = Form(""),
+    pvz_id: str = Form(""),
+):
+    """Сохранить данные доставки покупателя в лист «Покупатели» (личность из куки)."""
+    user = auth.current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    try:
+        users.set_delivery(user["phone"], last_name, first_name, patronymic,
+                           city, pvz_address, pvz_id)
+    except Exception:
+        traceback.print_exc()
+    return RedirectResponse("/", status_code=303)
 
 
 class OrderIn(BaseModel):

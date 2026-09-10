@@ -134,7 +134,40 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
 #toast{position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:var(--green-deep); color:#fbf6ec;
   padding:10px 18px; border-radius:999px; font-size:14px; opacity:0; transition:all .25s; z-index:9999; pointer-events:none}
 #toast.show{opacity:1; transform:translateX(-50%) translateY(-6px)}
-@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+@media (prefers-reduced-motion: reduce){*{transition:none!important; animation:none!important}}
+
+/* --- Плашка и форма данных доставки --- */
+.deliv-cta{display:block; width:calc(100% - 36px); text-align:center; margin:12px 18px 0; padding:12px;
+  border-radius:3px; background:var(--clay); color:#fff; border:0; font-size:13.5px; font-weight:700;
+  cursor:pointer; box-shadow:0 4px 12px rgba(180,106,85,.25); animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 4px 12px rgba(180,106,85,.22)}50%{box-shadow:0 5px 20px rgba(180,106,85,.55)}}
+.ov{display:none; position:fixed; inset:0; z-index:9998; background:rgba(34,63,34,.35);
+  backdrop-filter:blur(3px); align-items:flex-end; justify-content:center}
+.ov.show{display:flex}
+.deliv-card{width:100%; max-width:430px; max-height:92vh; overflow-y:auto; background:var(--cream);
+  border-radius:14px 14px 0 0; padding:18px 18px 22px; box-shadow:0 -8px 30px rgba(60,45,30,.25)}
+.dc-title{font-family:var(--serif); font-size:20px; color:var(--green); font-weight:600; margin-bottom:4px}
+.dc-sub{font-size:12.5px; color:var(--ink-soft); margin-bottom:12px; line-height:1.5}
+.deliv-card label{display:block; font-size:12px; color:var(--ink-soft); font-weight:600; margin:10px 0 4px}
+.deliv-card input{width:100%; padding:11px 12px; font-size:16px; font-family:var(--sans); color:var(--ink);
+  background:var(--panel); border:1px solid var(--line); border-radius:6px; outline:none}
+.deliv-card input:focus{border-color:var(--clay-soft); box-shadow:0 0 0 3px rgba(180,106,85,.12)}
+.dc-row{display:flex; gap:8px; align-items:flex-end}
+.dc-row input{flex:1}
+.dc-find{flex:0 0 auto; padding:11px 14px; border:0; border-radius:3px; background:var(--green); color:#fbf6ec;
+  font-family:var(--sans); font-weight:700; font-size:14px; cursor:pointer; white-space:nowrap}
+.dc-hint{font-size:11.5px; color:var(--ink-soft); margin:8px 0}
+.dc-chosen{font-size:12.5px; color:var(--clay-deep); font-weight:600; margin:6px 0; min-height:16px}
+#dv-results{max-height:210px; overflow-y:auto; margin:6px 0 2px}
+.pvz-opt{display:block; width:100%; text-align:left; padding:9px 11px; margin-bottom:6px; cursor:pointer;
+  background:var(--panel); border:1px solid var(--line); border-radius:6px; color:var(--ink); font-family:var(--sans); line-height:1.4}
+.pvz-opt b{color:var(--green)} .pvz-opt small{color:var(--ink-soft)}
+.pvz-opt.sel{border-color:var(--clay); box-shadow:0 0 0 2px rgba(180,106,85,.18)}
+.dc-actions{display:flex; gap:9px; margin-top:16px}
+.dc-actions .save{flex:2; padding:12px; border:0; border-radius:3px; background:var(--clay); color:#fff;
+  font-family:var(--sans); font-weight:700; font-size:15px; cursor:pointer}
+.dc-actions .cancel{flex:1; padding:12px; border-radius:3px; background:transparent; color:var(--clay-deep);
+  border:1px solid var(--clay-soft); font-family:var(--sans); font-weight:600; font-size:14px; cursor:pointer}
 </style>
 </head>
 <body>
@@ -153,6 +186,9 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
 
   {% if is_admin %}<a class="admin-door" href="/admin">🔑 Организаторская</a>{% endif %}
   {% if not is_auth %}<a class="login-cta" href="/login">Чтобы заказать и видеть «Моё» — войдите</a>{% endif %}
+  {% if is_auth and not delivery_complete %}
+    <button class="deliv-cta" type="button" onclick="openDeliv()">📦 Заполните данные для отправки — ФИО и ПВЗ Яндекс</button>
+  {% endif %}
 
   <div class="hero">
     <img class="logo-img" src="/static/logo_happy.png" alt="Happy Bottle — LUZI">
@@ -333,6 +369,35 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
 
 </div>
 
+{% if is_auth %}
+<div id="deliv-ov" class="ov" onclick="if(event.target===this)closeDeliv()">
+  <form class="deliv-card" method="POST" action="/delivery" onsubmit="return validDeliv()">
+    <div class="dc-title">Данные для отправки</div>
+    <div class="dc-sub">Нужны, чтобы оформить доставку Яндексом до пункта выдачи. Заполняются один раз.</div>
+    <label>Фамилия</label>
+    <input name="last_name" value="{{ deliv.last_name }}" autocomplete="family-name" required>
+    <label>Имя</label>
+    <input name="first_name" value="{{ deliv.first_name }}" autocomplete="given-name" required>
+    <label>Отчество</label>
+    <input name="patronymic" value="{{ deliv.patronymic }}" required>
+    <label>Город</label>
+    <div class="dc-row">
+      <input id="dv-city" name="city" value="{{ deliv.city }}" placeholder="Москва">
+      <button class="dc-find" type="button" onclick="pvzSearch()">Найти ПВЗ</button>
+    </div>
+    <div class="dc-hint" id="dv-hint">Впишите город и нажмите «Найти ПВЗ», затем выберите пункт из списка.</div>
+    <div class="dc-chosen" id="dv-chosen">{% if deliv.pvz_address %}Выбран ПВЗ: {{ deliv.pvz_address }}{% endif %}</div>
+    <div id="dv-results"></div>
+    <input type="hidden" name="pvz_id" id="dv-pvz-id" value="{{ deliv.pvz_id }}">
+    <input type="hidden" name="pvz_address" id="dv-pvz-address" value="{{ deliv.pvz_address }}">
+    <div class="dc-actions">
+      <button class="cancel" type="button" onclick="closeDeliv()">Отмена</button>
+      <button class="save" type="submit">Сохранить</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+
 <div id="toast">Готово</div>
 
 <script>
@@ -347,6 +412,44 @@ function showToast(text){
   const t = document.getElementById("toast");
   t.textContent = text; t.classList.add("show");
   setTimeout(() => t.classList.remove("show"), 1800);
+}
+
+// --- Данные для доставки: форма + выбор ПВЗ ---
+function openDeliv(){ const o=document.getElementById("deliv-ov"); if(o) o.classList.add("show"); }
+function closeDeliv(){ const o=document.getElementById("deliv-ov"); if(o) o.classList.remove("show"); }
+function validDeliv(){
+  if(!document.getElementById("dv-pvz-id").value){
+    document.getElementById("dv-hint").textContent = "Выберите пункт выдачи (ПВЗ) из списка.";
+    return false;
+  }
+  return true;
+}
+async function pvzSearch(){
+  const city = document.getElementById("dv-city").value.trim();
+  const res = document.getElementById("dv-results");
+  const hint = document.getElementById("dv-hint");
+  if(!city){ hint.textContent = "Впишите город"; return; }
+  hint.textContent = "Ищу пункты выдачи…"; res.innerHTML = "";
+  try{
+    const r = await fetch("/pvz?city=" + encodeURIComponent(city));
+    const d = await r.json();
+    if(!d.ok){ hint.textContent = "Ошибка: " + (d.error || "не удалось"); return; }
+    if(!d.points.length){ hint.textContent = "Ничего не найдено для «" + city + "»"; return; }
+    hint.textContent = "Найдено " + d.count + ". Выберите пункт:";
+    d.points.forEach(function(p){
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "pvz-opt";
+      b.innerHTML = "<b>" + (p.name || "ПВЗ") + "</b><br><small>" + (p.address || "") + "</small>";
+      b.addEventListener("click", function(){
+        document.getElementById("dv-pvz-id").value = p.id;
+        document.getElementById("dv-pvz-address").value = p.address || p.name || "";
+        document.getElementById("dv-chosen").textContent = "Выбран ПВЗ: " + (p.address || p.name);
+        res.querySelectorAll(".pvz-opt.sel").forEach(function(e){ e.classList.remove("sel"); });
+        b.classList.add("sel");
+      });
+      res.appendChild(b);
+    });
+  }catch(e){ hint.textContent = "Сбой запроса: " + e; }
 }
 function intVal(inp){
   const v = (inp.value || "").replace(/[^\d]/g, "");

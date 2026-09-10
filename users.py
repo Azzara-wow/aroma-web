@@ -42,6 +42,13 @@ COL_ADDRESS = 3
 COL_ROLE = 4
 COL_CREATED = 5
 COL_NOTE = 6
+# Доставка (колонки H–M) — покупатель заполняет сам на витрине для Яндекс Доставки.
+COL_LAST = 7        # Фамилия
+COL_FIRST = 8       # Имя
+COL_PATR = 9        # Отчество
+COL_CITY = 10       # Город
+COL_PVZ_ADDR = 11   # ПВЗ адрес (человекочитаемо)
+COL_PVZ_ID = 12     # ПВЗ id (platform_id для API)
 
 HEADER = ["телефон", "имя", "код-хеш", "адрес", "роль", "создан", "заметка"]
 
@@ -134,6 +141,8 @@ def _row_to_user(row, idx: int) -> dict:
     для показа, но он нужен маршруту входа, поэтому оставляем в 'code_hash')."""
     def c(i):
         return core.norm(row[i]) if i < len(row) else ""
+    last, first, patr = c(COL_LAST), c(COL_FIRST), c(COL_PATR)
+    pvz_id = c(COL_PVZ_ID)
     return {
         "row": idx,                       # 0-индекс в values (для точечной правки)
         "phone": normalize_phone(c(COL_PHONE)),
@@ -143,6 +152,15 @@ def _row_to_user(row, idx: int) -> dict:
         "role": c(COL_ROLE) or ROLE_BUYER,
         "created": c(COL_CREATED),
         "note": c(COL_NOTE),
+        # доставка
+        "last_name": last,
+        "first_name": first,
+        "patronymic": patr,
+        "city": c(COL_CITY),
+        "pvz_address": c(COL_PVZ_ADDR),
+        "pvz_id": pvz_id,
+        # заполнено, если есть Фамилия+Имя+Отчество и выбран ПВЗ
+        "delivery_complete": bool(last and first and patr and pvz_id),
     }
 
 
@@ -299,4 +317,21 @@ def update_address(phone_raw, address):
         return {"ok": False, "reason": "not_found"}
     a1 = f"{sheets.col_a1(COL_ADDRESS)}{idx + 1}"
     ws.update_acell(a1, (address or "").strip())
+    return {"ok": True}
+
+
+def set_delivery(phone_raw, last_name="", first_name="", patronymic="",
+                 city="", pvz_address="", pvz_id=""):
+    """Записать данные доставки (ФИО + город + ПВЗ) в колонки H–M для телефона."""
+    canon = normalize_phone(phone_raw)
+    ws = _ws()
+    values = ws.get_all_values()
+    idx = _find_row(values, canon)
+    if idx is None:
+        return {"ok": False, "reason": "not_found"}
+    rng = f"{sheets.col_a1(COL_LAST)}{idx + 1}:{sheets.col_a1(COL_PVZ_ID)}{idx + 1}"
+    ws.update(range_name=rng, values=[[
+        (last_name or "").strip(), (first_name or "").strip(), (patronymic or "").strip(),
+        (city or "").strip(), (pvz_address or "").strip(), (pvz_id or "").strip(),
+    ]])
     return {"ok": True}
