@@ -168,6 +168,18 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
   font-family:var(--sans); font-weight:700; font-size:15px; cursor:pointer}
 .dc-actions .cancel{flex:1; padding:12px; border-radius:3px; background:transparent; color:var(--clay-deep);
   border:1px solid var(--clay-soft); font-family:var(--sans); font-weight:600; font-size:14px; cursor:pointer}
+/* инлайн-вкладка «Доставка» */
+.deliv-panel{padding:14px 18px 24px}
+.deliv-panel label{display:block; font-size:12px; color:var(--ink-soft); font-weight:600; margin:10px 0 4px}
+.deliv-panel input{width:100%; padding:11px 12px; font-size:16px; font-family:var(--sans); color:var(--ink);
+  background:var(--cream); border:1px solid var(--line); border-radius:6px; outline:none}
+.deliv-panel input:focus{border-color:var(--clay-soft); box-shadow:0 0 0 3px rgba(180,106,85,.12)}
+.carrier-tag{display:inline-block; margin:4px 0 8px; padding:4px 10px; border-radius:999px;
+  background:rgba(44,79,44,.08); color:var(--green); font-weight:700; font-size:12px}
+.dc-find.wide{width:100%; margin-top:2px}
+#dv-city-results{margin:6px 0 2px}
+.mode.deliv-tab{color:var(--green); border-color:var(--line)}
+.mode.deliv-tab.active{background:var(--green); color:#fff; border-color:var(--green)}
 </style>
 </head>
 <body>
@@ -187,7 +199,7 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
   {% if is_admin %}<a class="admin-door" href="/admin">🔑 Организаторская</a>{% endif %}
   {% if not is_auth %}<a class="login-cta" href="/login">Чтобы заказать и видеть «Моё» — войдите</a>{% endif %}
   {% if is_auth and not delivery_complete %}
-    <button class="deliv-cta" type="button" onclick="openDeliv()">📦 Заполните данные для отправки — ФИО и ПВЗ Яндекс</button>
+    <button class="deliv-cta" type="button" onclick="gotoDelivery()">📦 Заполните данные для отправки — ФИО и ПВЗ Яндекс</button>
   {% endif %}
 
   <div class="hero">
@@ -210,7 +222,7 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
     </div>
     <div class="tabs bottom" id="tabs">
       {% for t in cat_tabs %}<button class="tab{% if t == 'Общее' %} active{% endif %}" data-tab="{{ t }}">{{ t }}</button>{% endfor %}
-      {% if is_auth %}<button class="mode" data-mode="mine">Моё</button>{% endif %}
+      {% if is_auth %}<button class="mode" data-mode="mine">Моё</button><button class="mode deliv-tab" data-mode="delivery">📦 Доставка</button>{% endif %}
     </div>
   </div>
 
@@ -352,6 +364,44 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
   </div>
 
   {% if is_auth %}
+  <div id="delivery-block" hidden>
+    <form class="deliv-panel" method="POST" action="/delivery" onsubmit="return validDeliv()">
+      <div class="dc-sub">Данные для доставки Яндексом до пункта выдачи. Меняются только по кнопке «Сохранить».</div>
+      <div class="carrier-tag">🚚 Яндекс Доставка</div>
+
+      <label>Фамилия</label>
+      <input name="last_name" value="{{ deliv.last_name }}" autocomplete="family-name" required>
+      <label>Имя</label>
+      <input name="first_name" value="{{ deliv.first_name }}" autocomplete="given-name" required>
+      <label>Отчество</label>
+      <input name="patronymic" value="{{ deliv.patronymic }}" required>
+
+      <label>Город доставки</label>
+      <div class="dc-row">
+        <input id="dv-city" name="city" value="{{ deliv.city }}" placeholder="Начните вводить город">
+        <button class="dc-find" type="button" onclick="citySearch()">Найти</button>
+      </div>
+      <div id="dv-city-results"></div>
+      <input type="hidden" id="dv-geo-id" value="">
+
+      <label>Пункт выдачи (ПВЗ)</label>
+      <button class="dc-find wide" type="button" onclick="pvzSearch()">Найти ПВЗ в городе</button>
+      <input id="dv-street" placeholder="Фильтр по улице (необязательно)" oninput="filterPvz()">
+      <div class="dc-hint" id="dv-hint">Выберите город, найдите ПВЗ, при желании сузьте по улице, затем выберите пункт.</div>
+      <div class="dc-chosen" id="dv-chosen">{% if deliv.pvz_address %}Выбран ПВЗ: {{ deliv.pvz_address }}{% endif %}</div>
+      <div id="dv-results"></div>
+      <input type="hidden" name="pvz_id" id="dv-pvz-id" value="{{ deliv.pvz_id }}">
+      <input type="hidden" name="pvz_address" id="dv-pvz-address" value="{{ deliv.pvz_address }}">
+
+      <div class="dc-actions">
+        <button class="save" type="submit">Сохранить</button>
+      </div>
+      <div class="dc-hint" style="margin-top:10px">Ссылка на отслеживание появится здесь после отправки. СДЭК добавим позже.</div>
+    </form>
+  </div>
+  {% endif %}
+
+  {% if is_auth %}
   <div id="preview">
     <div class="pv-title">Добавить в заказ</div>
     <div id="pv-list"></div>
@@ -369,35 +419,6 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
 
 </div>
 
-{% if is_auth %}
-<div id="deliv-ov" class="ov" onclick="if(event.target===this)closeDeliv()">
-  <form class="deliv-card" method="POST" action="/delivery" onsubmit="return validDeliv()">
-    <div class="dc-title">Данные для отправки</div>
-    <div class="dc-sub">Нужны, чтобы оформить доставку Яндексом до пункта выдачи. Заполняются один раз.</div>
-    <label>Фамилия</label>
-    <input name="last_name" value="{{ deliv.last_name }}" autocomplete="family-name" required>
-    <label>Имя</label>
-    <input name="first_name" value="{{ deliv.first_name }}" autocomplete="given-name" required>
-    <label>Отчество</label>
-    <input name="patronymic" value="{{ deliv.patronymic }}" required>
-    <label>Город</label>
-    <div class="dc-row">
-      <input id="dv-city" name="city" value="{{ deliv.city }}" placeholder="Москва">
-      <button class="dc-find" type="button" onclick="pvzSearch()">Найти ПВЗ</button>
-    </div>
-    <div class="dc-hint" id="dv-hint">Впишите город и нажмите «Найти ПВЗ», затем выберите пункт из списка.</div>
-    <div class="dc-chosen" id="dv-chosen">{% if deliv.pvz_address %}Выбран ПВЗ: {{ deliv.pvz_address }}{% endif %}</div>
-    <div id="dv-results"></div>
-    <input type="hidden" name="pvz_id" id="dv-pvz-id" value="{{ deliv.pvz_id }}">
-    <input type="hidden" name="pvz_address" id="dv-pvz-address" value="{{ deliv.pvz_address }}">
-    <div class="dc-actions">
-      <button class="cancel" type="button" onclick="closeDeliv()">Отмена</button>
-      <button class="save" type="submit">Сохранить</button>
-    </div>
-  </form>
-</div>
-{% endif %}
-
 <div id="toast">Готово</div>
 
 <script>
@@ -414,9 +435,12 @@ function showToast(text){
   setTimeout(() => t.classList.remove("show"), 1800);
 }
 
-// --- Данные для доставки: форма + выбор ПВЗ ---
-function openDeliv(){ const o=document.getElementById("deliv-ov"); if(o) o.classList.add("show"); }
-function closeDeliv(){ const o=document.getElementById("deliv-ov"); if(o) o.classList.remove("show"); }
+// --- Данные для доставки: вкладка, город, ПВЗ ---
+function gotoDelivery(){
+  curMode = "delivery"; applyView();
+  const b = document.getElementById("delivery-block");
+  if (b) b.scrollIntoView({behavior:"smooth", block:"start"});
+}
 function validDeliv(){
   if(!document.getElementById("dv-pvz-id").value){
     document.getElementById("dv-hint").textContent = "Выберите пункт выдачи (ПВЗ) из списка.";
@@ -424,33 +448,74 @@ function validDeliv(){
   }
   return true;
 }
-async function pvzSearch(){
-  const city = document.getElementById("dv-city").value.trim();
-  const res = document.getElementById("dv-results");
-  const hint = document.getElementById("dv-hint");
-  if(!city){ hint.textContent = "Впишите город"; return; }
-  hint.textContent = "Ищу пункты выдачи…"; res.innerHTML = "";
+async function citySearch(){
+  const q = document.getElementById("dv-city").value.trim();
+  const box = document.getElementById("dv-city-results");
+  if(q.length < 2){ box.innerHTML = ""; return; }
+  box.innerHTML = "<div class='dc-hint'>Ищу город…</div>";
   try{
-    const r = await fetch("/pvz?city=" + encodeURIComponent(city));
+    const r = await fetch("/cities?q=" + encodeURIComponent(q));
     const d = await r.json();
-    if(!d.ok){ hint.textContent = "Ошибка: " + (d.error || "не удалось"); return; }
-    if(!d.points.length){ hint.textContent = "Ничего не найдено для «" + city + "»"; return; }
-    hint.textContent = "Найдено " + d.count + ". Выберите пункт:";
-    d.points.forEach(function(p){
+    if(!d.ok || !d.cities.length){ box.innerHTML = "<div class='dc-hint'>Город не найден</div>"; return; }
+    box.innerHTML = "";
+    d.cities.forEach(function(cty){
       const b = document.createElement("button");
       b.type = "button"; b.className = "pvz-opt";
-      b.innerHTML = "<b>" + (p.name || "ПВЗ") + "</b><br><small>" + (p.address || "") + "</small>";
+      b.innerHTML = "<b>" + (cty.address || "") + "</b>";
       b.addEventListener("click", function(){
-        document.getElementById("dv-pvz-id").value = p.id;
-        document.getElementById("dv-pvz-address").value = p.address || p.name || "";
-        document.getElementById("dv-chosen").textContent = "Выбран ПВЗ: " + (p.address || p.name);
-        res.querySelectorAll(".pvz-opt.sel").forEach(function(e){ e.classList.remove("sel"); });
-        b.classList.add("sel");
+        document.getElementById("dv-geo-id").value = cty.geo_id;
+        document.getElementById("dv-city").value = cty.address || "";
+        box.innerHTML = "";
+        pvzSearch();
       });
-      res.appendChild(b);
+      box.appendChild(b);
     });
+  }catch(e){ box.innerHTML = "<div class='dc-hint'>Сбой: " + e + "</div>"; }
+}
+let _pvzAll = [];
+async function pvzSearch(){
+  const geo = document.getElementById("dv-geo-id").value;
+  const city = document.getElementById("dv-city").value.trim();
+  const hint = document.getElementById("dv-hint");
+  const res = document.getElementById("dv-results");
+  if(!geo && !city){ hint.textContent = "Впишите город"; return; }
+  hint.textContent = "Ищу пункты выдачи…"; res.innerHTML = ""; _pvzAll = [];
+  try{
+    const url = geo ? ("/pvz?geo_id=" + encodeURIComponent(geo))
+                    : ("/pvz?city=" + encodeURIComponent(city));
+    const r = await fetch(url);
+    const d = await r.json();
+    if(!d.ok){ hint.textContent = "Ошибка: " + (d.error || "не удалось"); return; }
+    if(!d.points.length){ hint.textContent = "Ничего не найдено"; return; }
+    _pvzAll = d.points;
+    hint.textContent = "Найдено " + d.count + ". Выберите пункт" + (d.count > 60 ? " (сузьте по улице)" : "") + ":";
+    renderPvz();
   }catch(e){ hint.textContent = "Сбой запроса: " + e; }
 }
+function renderPvz(){
+  const res = document.getElementById("dv-results");
+  const street = (document.getElementById("dv-street").value || "").trim().toLowerCase();
+  res.innerHTML = ""; let shown = 0;
+  for(const p of _pvzAll){
+    const addr = p.address || "";
+    if(street && !addr.toLowerCase().includes(street)) continue;
+    if(shown >= 60) break;
+    shown++;
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "pvz-opt";
+    b.innerHTML = "<b>" + (p.name || "ПВЗ") + "</b><br><small>" + addr + "</small>";
+    b.addEventListener("click", function(){
+      document.getElementById("dv-pvz-id").value = p.id;
+      document.getElementById("dv-pvz-address").value = addr || p.name || "";
+      document.getElementById("dv-chosen").textContent = "Выбран ПВЗ: " + (addr || p.name);
+      res.querySelectorAll(".pvz-opt.sel").forEach(function(e){ e.classList.remove("sel"); });
+      b.classList.add("sel");
+    });
+    res.appendChild(b);
+  }
+  if(shown === 0) res.innerHTML = "<div class='dc-hint'>Нет ПВЗ по фильтру «" + street + "»</div>";
+}
+function filterPvz(){ if(_pvzAll.length) renderPvz(); }
 function intVal(inp){
   const v = (inp.value || "").replace(/[^\d]/g, "");
   if (v === "") return 0;
@@ -483,9 +548,18 @@ function clearAllDrafts(){
 
 function applyView(){
   const q = (document.getElementById("search").value || "").trim().toLowerCase();
-  const infoTab = (curMode !== "mine" && curTab === "Информация");
+  const delivMode = (curMode === "delivery");
+  const infoTab = (curMode === "category" && curTab === "Информация");
   const infoBlock = document.getElementById("info-block");
+  const delivBlock = document.getElementById("delivery-block");
   if (infoBlock) infoBlock.hidden = !infoTab;
+  if (delivBlock) delivBlock.hidden = !delivMode;
+
+  // в режиме «Доставка» прячем витрину целиком, показываем только блок доставки
+  const listEl = document.getElementById("list");
+  const secEl = document.querySelector(".seclabel");
+  if (listEl) listEl.style.display = delivMode ? "none" : "";
+  if (secEl) secEl.style.display = delivMode ? "none" : "";
 
   document.querySelectorAll("#list .item").forEach(item => {
     const name = (item.dataset.name || "").toLowerCase();
@@ -495,7 +569,7 @@ function applyView(){
     const ordered = parseInt(item.dataset.ordered || "0", 10) || 0;
     const source = item.dataset.source || "zakupka";
     let visible;
-    if (infoTab) visible = false;
+    if (delivMode || infoTab) visible = false;
     else if (curMode === "mine") visible = ordered > 0;
     else if (curTab === "Наличие") visible = source === "nalichie";
     else if (curTab === "Ассортимент") visible = source === "catalog";
@@ -509,9 +583,9 @@ function applyView(){
   });
 
   document.getElementById("heading-main").textContent =
-    (curMode === "mine") ? "Мои заказы" : (curTab === "Общее") ? "Все ароматы" : curTab;
-  document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", curMode !== "mine" && b.dataset.tab === curTab));
-  document.querySelectorAll(".mode").forEach(b => b.classList.toggle("active", curMode === "mine"));
+    delivMode ? "Доставка" : (curMode === "mine") ? "Мои заказы" : (curTab === "Общее") ? "Все ароматы" : curTab;
+  document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", curMode === "category" && b.dataset.tab === curTab));
+  document.querySelectorAll(".mode").forEach(b => b.classList.toggle("active", b.dataset.mode === curMode));
 }
 
 function collectOrder(){
@@ -593,7 +667,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll(".tab").forEach(b =>
     b.addEventListener("click", () => { curMode = "category"; curTab = b.dataset.tab; applyView(); }));
   document.querySelectorAll(".mode").forEach(b =>
-    b.addEventListener("click", () => { curMode = "mine"; applyView(); }));
+    b.addEventListener("click", () => { curMode = b.dataset.mode; applyView(); }));
   document.querySelectorAll(".amount-input").forEach(inp =>
     inp.addEventListener("input", () => { saveDraft(inp); refreshPreview(); }));
   const search = document.getElementById("search");
@@ -602,6 +676,12 @@ document.addEventListener("DOMContentLoaded", () => {
   restoreDrafts();   // вернуть незавершённый черновик
   applyView();
   refreshPreview();
+  // после сохранения доставки возвращаемся на её вкладку с подтверждением
+  if (new URLSearchParams(location.search).get("deliv") === "1"){
+    showToast("Данные доставки сохранены ✓");
+    curMode = "delivery"; applyView();
+    history.replaceState(null, "", "/");
+  }
 });
 
 // PWA: регистрируем service worker (нужно для установки на телефон)

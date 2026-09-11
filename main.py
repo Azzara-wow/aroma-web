@@ -159,17 +159,35 @@ def index(request: Request):
         )
 
 
+@app.get("/cities")
+def cities_search(request: Request, q: str = ""):
+    """JSON-автоподбор города Яндекса (location/detect) — [{geo_id, address}]."""
+    q = (q or "").strip()
+    if len(q) < 2:
+        return JSONResponse({"ok": False, "error": "Введите город"})
+    try:
+        c = YandexDeliveryClient()
+        variants = c.detect_location(q)
+        data = [{"geo_id": v.get("geo_id"), "address": v.get("address", "")}
+                for v in variants if v.get("geo_id")]
+        return JSONResponse({"ok": True, "env": c.env, "cities": data})
+    except YandexDeliveryError as e:
+        return JSONResponse({"ok": False, "error": str(e)})
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse({"ok": False, "error": str(e)})
+
+
 @app.get("/pvz")
-def pvz_search(request: Request, city: str = ""):
-    """JSON-поиск ПВЗ Яндекса по городу — для пикера в форме доставки."""
-    city = (city or "").strip()
-    if not city:
-        return JSONResponse({"ok": False, "error": "Укажите город"})
+def pvz_search(request: Request, city: str = "", geo_id: int = 0):
+    """JSON-поиск ПВЗ Яндекса по городу или geo_id — для формы доставки."""
     try:
         c = YandexDeliveryClient()  # окружение/токен из env (по умолчанию тест)
-        gid = c.geo_id(city)
+        gid = geo_id or (c.geo_id(city.strip()) if city.strip() else 0)
+        if not gid:
+            return JSONResponse({"ok": False, "error": "Укажите город"})
         points = c.list_pickup_points(geo_id=gid)
-        data = [{"id": p.id, "name": p.name, "address": p.full_address} for p in points[:40]]
+        data = [{"id": p.id, "name": p.name, "address": p.full_address} for p in points[:300]]
         return JSONResponse({"ok": True, "env": c.env, "count": len(points), "points": data})
     except YandexDeliveryError as e:
         return JSONResponse({"ok": False, "error": str(e)})
@@ -197,7 +215,7 @@ def save_delivery(
                            city, pvz_address, pvz_id)
     except Exception:
         traceback.print_exc()
-    return RedirectResponse("/", status_code=303)
+    return RedirectResponse("/?deliv=1", status_code=303)
 
 
 class OrderIn(BaseModel):
