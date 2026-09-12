@@ -140,6 +140,7 @@ def index(request: Request):
                     "city": user.get("city", ""),
                     "pvz_address": user.get("pvz_address", ""),
                     "pvz_id": user.get("pvz_id", ""),
+                    "tracking_url": user.get("tracking_url", ""),
                 } if is_auth else {},
             },
         )

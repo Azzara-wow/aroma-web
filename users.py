@@ -49,6 +49,7 @@ COL_PATR = 9        # Отчество
 COL_CITY = 10       # Город
 COL_PVZ_ADDR = 11   # ПВЗ адрес (человекочитаемо)
 COL_PVZ_ID = 12     # ПВЗ id (platform_id для API)
+COL_TRACKING = 13   # N — ссылка отслеживания (пишет дашборд после подтверждения доставки)
 
 HEADER = ["телефон", "имя", "код-хеш", "адрес", "роль", "создан", "заметка"]
 
@@ -159,6 +160,7 @@ def _row_to_user(row, idx: int) -> dict:
         "city": c(COL_CITY),
         "pvz_address": c(COL_PVZ_ADDR),
         "pvz_id": pvz_id,
+        "tracking_url": c(COL_TRACKING),
         # заполнено, если есть Фамилия+Имя+Отчество и выбран ПВЗ
         "delivery_complete": bool(last and first and patr and pvz_id),
     }
