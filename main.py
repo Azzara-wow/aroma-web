@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
+import os
 import traceback
 
 from yandex_delivery import YandexDeliveryClient
@@ -186,10 +187,20 @@ def cities_search(request: Request, q: str = "", carrier: str = "yandex"):
         return JSONResponse({"ok": False, "error": str(e)})
 
 
+def _delivery_paid_by():
+    """'recipient' если доставку оплачивает покупатель (наложенный платёж), иначе 'seller'.
+    Читается из окружения/.env (DELIVERY_PAID_BY), общий флаг витрины и дашборда."""
+    from yandex_delivery import config as ycfg
+    ycfg._load_dotenv()
+    return os.environ.get("DELIVERY_PAID_BY", "seller").lower()
+
+
 @app.get("/pvz")
 def pvz_search(request: Request, carrier: str = "yandex", city_code: int = 0, city: str = ""):
     """JSON-поиск ПВЗ выбранного перевозчика по коду города → [{id, name, address}].
-    id = platform_id (Яндекс) или code ПВЗ (СДЭК)."""
+    id = platform_id (Яндекс) или code ПВЗ (СДЭК). Если доставку платит покупатель —
+    показываем только ПВЗ с наложенным платежом."""
+    cod = _delivery_paid_by() == "recipient"
     try:
         if carrier == "cdek":
             c = CdekClient()
@@ -197,6 +208,8 @@ def pvz_search(request: Request, carrier: str = "yandex", city_code: int = 0, ci
             if not code:
                 return JSONResponse({"ok": False, "error": "Укажите город"})
             points = c.list_pickup_points(city_code=code, is_handout=True, size=300)
+            if cod:  # СДЭК: только точки с наложенным платежом
+                points = [p for p in points if p.allowed_cod]
             data = [{"id": p.code, "name": p.name or "ПВЗ", "address": p.address_full} for p in points]
         else:
             c = YandexDeliveryClient()
@@ -204,8 +217,11 @@ def pvz_search(request: Request, carrier: str = "yandex", city_code: int = 0, ci
             if not gid:
                 return JSONResponse({"ok": False, "error": "Укажите город"})
             points = c.list_pickup_points(geo_id=gid)
+            if cod:  # Яндекс: только ПВЗ, принимающие оплату при получении
+                points = [p for p in points if "card_on_receipt" in (p.payment_methods or [])]
             data = [{"id": p.id, "name": p.name, "address": p.full_address} for p in points[:300]]
-        return JSONResponse({"ok": True, "carrier": carrier, "count": len(data), "points": data})
+        return JSONResponse({"ok": True, "carrier": carrier, "cod": cod,
+                             "count": len(data), "points": data})
     except (YandexDeliveryError, CdekError) as e:
         return JSONResponse({"ok": False, "error": str(e)})
     except Exception as e:

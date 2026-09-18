@@ -529,7 +529,8 @@ async function pvzSearch(){
     if(!d.ok){ hint.textContent = "Ошибка: " + (d.error || "не удалось"); return; }
     if(!d.points.length){ hint.textContent = "Ничего не найдено"; return; }
     _pvzAll = d.points;
-    hint.textContent = "Найдено " + d.count + ". Выберите пункт" + (d.count > 60 ? " (сузьте по улице)" : "") + ":";
+    hint.textContent = (d.cod ? "Оплата доставки при получении — показаны ПВЗ с наложенным платежом. " : "")
+      + "Найдено " + d.count + ". Выберите пункт" + (d.count > 60 ? " (сузьте по улице)" : "") + ":";
     renderPvz();
   }catch(e){ hint.textContent = "Сбой запроса: " + e; }
 }
