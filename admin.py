@@ -141,7 +141,7 @@ def build_invoices():
                 "per_ml": calc["per_ml"], "amount": calc["amount"],
             })
             d["total"] += calc["amount"]
-            export_rows.append([buyer, meta["name"], int(vol), calc["per_ml"], calc["amount"]])
+            export_rows.append([f"{phone} - {buyer}", meta["name"], int(vol), calc["per_ml"], calc["amount"]])
 
         if d["positions"] or d["problems"]:
             details.append(d)
