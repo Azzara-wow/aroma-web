@@ -49,9 +49,17 @@ TAG_EXTRA = "добор"
 #  Доступ к листу
 # ======================================================================
 
+FLOW_TTL = 20   # сек — короткий кэш чтений Потока (сбрасывается при записи заказа)
+
+
 def _ws():
     """Лист 'Поток' (создаётся с шапкой, если его ещё нет)."""
     return sheets.get_or_create_ws(FLOW_SHEET_NAME, HEADER)
+
+
+def _values():
+    """Значения Потока с коротким кэшем (меньше сетевых чтений на витрине)."""
+    return sheets.vget("flow", FLOW_TTL, lambda: _ws().get_all_values())
 
 
 def _pad(row):
@@ -139,7 +147,7 @@ def add_order(phone_raw, name, aroma, volume, direction=DIR_PLUS):
     direction = DIR_MINUS if core.norm(direction).lower() == DIR_MINUS else DIR_PLUS
 
     ws = _ws()
-    values = ws.get_all_values()
+    values = _values()
     tag = TAG_EXTRA if _phone_seen(values, phone) else TAG_MAIN
 
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -147,6 +155,7 @@ def add_order(phone_raw, name, aroma, volume, direction=DIR_PLUS):
         [stamp, phone, (name or "").strip(), aroma, vol, direction, tag],
         value_input_option="RAW",
     )
+    sheets.vdrop("flow")   # заказ записан — кэш Потока устарел
 
     # новый остаток = прежний (по values до записи) +/- этот объём
     net = _net_pair(values, phone, aroma)
@@ -169,13 +178,13 @@ def add_order(phone_raw, name, aroma, volume, direction=DIR_PLUS):
 
 def net_orders():
     """Полная свёртка Потока: phone -> {"name", "aromas": {аромат: мл}}. Для счёта."""
-    return _aggregate(_ws().get_all_values())
+    return _aggregate(_values())
 
 
 def collected_map():
     """Набрано по каждому аромату (сумма по всем покупателям): {аромат: мл}."""
     out = {}
-    for u in _aggregate(_ws().get_all_values()).values():
+    for u in _aggregate(_values()).values():
         for a, v in u["aromas"].items():
             out[a] = out.get(a, 0) + v
     return out
@@ -188,7 +197,7 @@ def board(phone_raw=None):
       mine      — {аромат: мой остаток, мл} для phone_raw (или {}).
     Используется витриной, чтобы не читать Поток дважды.
     """
-    agg = _aggregate(_ws().get_all_values())
+    agg = _aggregate(_values())
     collected = {}
     for u in agg.values():
         for a, v in u["aromas"].items():
@@ -204,21 +213,21 @@ def board(phone_raw=None):
 def buyer_positions(phone_raw):
     """Заказ конкретного покупателя: {аромат: мл} (только положительные остатки)."""
     phone = users.normalize_phone(phone_raw)
-    u = _aggregate(_ws().get_all_values()).get(phone)
+    u = _aggregate(_values()).get(phone)
     return dict(u["aromas"]) if u else {}
 
 
 def pair_volume(phone_raw, aroma):
     """Текущий остаток пары (телефон, аромат) в мл."""
     phone = users.normalize_phone(phone_raw)
-    return int(_net_pair(_ws().get_all_values(), phone, aroma))
+    return int(_net_pair(_values(), phone, aroma))
 
 
 def pair_and_collected(phone_raw, aroma):
     """За одно чтение: остаток пары (телефон, аромат) и всего набрано по аромату.
     Для формы организатора ('покажу, сколько уже есть')."""
     phone = users.normalize_phone(phone_raw)
-    values = _ws().get_all_values()
+    values = _values()
     ta = core.norm(aroma).lower()
     pair = 0
     total = 0
@@ -250,7 +259,7 @@ def add_batch(phone_raw, name, additions: dict):
         return {"ok": False, "reason": "Телефон в формате 7XXXXXXXXXX"}
 
     ws = _ws()
-    values = ws.get_all_values()
+    values = _values()
     tag = TAG_EXTRA if _phone_seen(values, phone) else TAG_MAIN
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -267,4 +276,5 @@ def add_batch(phone_raw, name, additions: dict):
 
     if rows_to_add:
         ws.append_rows(rows_to_add, value_input_option="RAW")
+        sheets.vdrop("flow")   # заказ записан — кэш Потока устарел
     return {"ok": True, "changes": changes}

@@ -30,6 +30,8 @@ NALICHIE_URL = "https://docs.google.com/spreadsheets/d/10-tDVQSOsMi099qbX21RdwNC
 ASSORT_TITLES = {"лист1"}      # ассортимент наличия
 FLOW_TITLES = {"заказы"}       # поток заказов
 STATUS_DONE = "выполнено"
+NAL_ASSORT_TTL = 30   # сек, кэш ассортимента склада
+NAL_FLOW_TTL = 20     # сек, кэш потока склада
 
 _ws_cache = {}
 
@@ -87,7 +89,7 @@ def _cell(row, idx):
 
 def _assort_rows():
     ws = _sheet("assort")
-    values = ws.get_all_values()
+    values = sheets.vget("nal_assort", NAL_ASSORT_TTL, ws.get_all_values)
     header = values[0] if values else []
     ci = {"name": _resolve(header, A_NAME), "stock": _resolve(header, A_STOCK),
           "perml": _resolve(header, A_PERML), "show": _resolve(header, A_SHOW)}
@@ -96,7 +98,7 @@ def _assort_rows():
 
 def _flow_rows():
     ws = _sheet("flow")
-    values = ws.get_all_values()
+    values = sheets.vget("nal_flow", NAL_FLOW_TTL, ws.get_all_values)
     header = values[0] if values else []
     ci = {"date": _resolve(header, F_DATE), "phone": _resolve(header, F_PHONE),
           "status": _resolve(header, F_STATUS), "iname": _resolve(header, F_INAME),
@@ -298,6 +300,7 @@ def add_batch(phone_raw, name, additions: dict, status="", enforce_stock=True):
     if rows:
         _sheet("flow").append_rows(
             rows, value_input_option="USER_ENTERED")
+        sheets.vdrop("nal_flow")
     return {"ok": True, "changes": changes, "rejected": rejected}
 
 
@@ -325,6 +328,7 @@ def add_item(name, stock, per_ml, show=""):
     row = _row_for(aheader, aci, mapping)
     _sheet("assort").append_row(
         row, value_input_option="USER_ENTERED")
+    sheets.vdrop("nal_assort")
     return {"ok": True, "name": name}
 
 
@@ -341,6 +345,7 @@ def _append_flow(phone, name, item, qty, direction, status, per_ml, show):
                "perml": per_ml or "", "show": show or "", "sum": summ, "dir": direction}
     _sheet("flow").append_row(
         _row_for(fheader, fci, mapping), value_input_option="USER_ENTERED")
+    sheets.vdrop("nal_flow")
     return summ
 
 

@@ -128,6 +128,14 @@ def _ws():
     return sheets.get_or_create_ws(USERS_SHEET_NAME, HEADER, USERS_URL)
 
 
+USERS_TTL = 30   # сек — короткий кэш чтений листа Пользователи
+
+
+def _values():
+    """Значения листа Пользователи с коротким кэшем (сброс при записи)."""
+    return sheets.vget("users", USERS_TTL, lambda: _ws().get_all_values())
+
+
 def _find_row(values, canon: str):
     """0-индекс строки пользователя в values по канону телефона. None если нет."""
     for r in range(1, len(values)):  # строка 0 — шапка
@@ -171,7 +179,7 @@ def get_user(phone_raw):
     canon = normalize_phone(phone_raw)
     if not valid_phone(canon):
         return None
-    values = _ws().get_all_values()
+    values = _values()
     idx = _find_row(values, canon)
     return _row_to_user(values[idx], idx) if idx is not None else None
 
@@ -183,7 +191,7 @@ def is_admin(user) -> bool:
 
 def list_users():
     """Список зарегистрированных: [{'phone','name'}] (для выбора в админке)."""
-    values = _ws().get_all_values()
+    values = _values()
     out = []
     for r in range(1, len(values)):
         row = values[r]
@@ -197,7 +205,7 @@ def list_users():
 
 def list_full():
     """Полный список: [{phone, name, role, has_code}] — для страницы покупателей."""
-    values = _ws().get_all_values()
+    values = _values()
     out = []
     for r in range(1, len(values)):
         row = values[r]
@@ -228,13 +236,14 @@ def add_buyer(phone_raw, name, address="", role=ROLE_BUYER):
         return {"ok": False, "reason": "Укажите имя"}
 
     ws = _ws()
-    values = ws.get_all_values()
+    values = _values()
     if _find_row(values, canon) is not None:
         return {"ok": False, "reason": "Этот телефон уже есть в списке"}
 
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     row = [canon, name, "", (address or "").strip(), role, stamp, ""]  # код пустой
     ws.append_row(row, value_input_option="RAW")
+    sheets.vdrop("users")
     return {"ok": True, "phone": canon, "name": name}
 
 
@@ -258,7 +267,7 @@ def register(phone_raw, name, code, address=""):
         return {"ok": False, "reason": f"Код минимум {MIN_CODE_LEN} символа"}
 
     ws = _ws()
-    values = ws.get_all_values()
+    values = _values()
     if _find_row(values, canon) is not None:
         return {"ok": False, "reason": "Этот телефон уже зарегистрирован"}
 
@@ -267,6 +276,7 @@ def register(phone_raw, name, code, address=""):
     # RAW: пишем как есть, без интерпретации формул; телефон из 11 цифр Sheets
     # хранит как целое и отдаёт обратно теми же цифрами — normalize_phone это стерпит.
     ws.append_row(row, value_input_option="RAW")
+    sheets.vdrop("users")
     return {"ok": True, "user": _row_to_user(row, len(values))}
 
 
@@ -299,13 +309,14 @@ def set_code(phone_raw, code):
         return {"ok": False, "reason": f"Код минимум {MIN_CODE_LEN} символа"}
 
     ws = _ws()
-    values = ws.get_all_values()
+    values = _values()
     idx = _find_row(values, canon)
     if idx is None:
         return {"ok": False, "reason": "not_found"}
 
     a1 = f"{sheets.col_a1(COL_CODE_HASH)}{idx + 1}"  # +1: gspread 1-индекс строки
     ws.update_acell(a1, hash_code(code))
+    sheets.vdrop("users")
     return {"ok": True}
 
 
@@ -313,12 +324,13 @@ def update_address(phone_raw, address):
     """Обновить адрес доставки (покупатель правит в профиле / при заказе)."""
     canon = normalize_phone(phone_raw)
     ws = _ws()
-    values = ws.get_all_values()
+    values = _values()
     idx = _find_row(values, canon)
     if idx is None:
         return {"ok": False, "reason": "not_found"}
     a1 = f"{sheets.col_a1(COL_ADDRESS)}{idx + 1}"
     ws.update_acell(a1, (address or "").strip())
+    sheets.vdrop("users")
     return {"ok": True}
 
 
@@ -327,7 +339,7 @@ def set_delivery(phone_raw, last_name="", first_name="", patronymic="",
     """Записать данные доставки (ФИО + город + ПВЗ) в колонки H–M для телефона."""
     canon = normalize_phone(phone_raw)
     ws = _ws()
-    values = ws.get_all_values()
+    values = _values()
     idx = _find_row(values, canon)
     if idx is None:
         return {"ok": False, "reason": "not_found"}
@@ -336,4 +348,5 @@ def set_delivery(phone_raw, last_name="", first_name="", patronymic="",
         (last_name or "").strip(), (first_name or "").strip(), (patronymic or "").strip(),
         (city or "").strip(), (pvz_address or "").strip(), (pvz_id or "").strip(),
     ]])
+    sheets.vdrop("users")
     return {"ok": True}

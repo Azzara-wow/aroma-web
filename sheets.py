@@ -7,6 +7,7 @@
 # на обрывах канала (частая беда доступа к Google из РФ).
 
 import os
+import time
 from urllib.parse import urlparse
 
 import gspread
@@ -43,13 +44,21 @@ def _find_key_path() -> str:
 
 
 def _install_retries(client):
-    """Автоповтор идемпотентных запросов (GET/PUT) на обрывах и 429/5xx + таймаут.
-    POST (append) не повторяем, чтобы не задвоить заказ."""
+    """
+    Автоповтор идемпотентных запросов (GET/PUT) на обрывах и 429/5xx + таймаут.
+    POST (append) не повторяем, чтобы не задвоить заказ.
+
+    ВАЖНО про лимиты времени (иначе один запрос уходит за 60 с nginx → белый экран):
+      - таймаут (connect=4, read=8) применяется gspend'ом И к запросам данных,
+        И к обновлению OAuth-токена (google-auth берёт тот же timeout);
+      - повторов немного (total=2 → до 3 попыток), чтобы худший случай одного
+        чтения был ~3×12 + бэкофф ≈ 37 с, а не 84 с.
+    """
     try:
         from requests.adapters import HTTPAdapter
         from urllib3.util.retry import Retry
         retry = Retry(
-            total=4, connect=4, read=4, backoff_factor=0.6,
+            total=2, connect=2, read=2, backoff_factor=0.4,
             status_forcelist=[429, 500, 502, 503, 504],
             allowed_methods=frozenset(["GET", "PUT", "HEAD", "OPTIONS", "DELETE"]),
             raise_on_status=False,
@@ -61,9 +70,34 @@ def _install_retries(client):
     except Exception:
         pass
     try:
-        client.set_timeout(20)
+        client.set_timeout((4, 8))   # (connect, read) в секундах
     except Exception:
         pass
+
+
+# ---------- короткий кэш прочитанных значений листов ----------
+# index на витрине делает 4–6 сетевых чтений; при флапе Google это копится.
+# Кэшируем values по строковому ключу на TTL и сбрасываем при записи.
+_vcache = {}   # key -> (ts, values)
+
+
+def vget(key: str, ttl: float, fetch):
+    """Вернуть закэшированные values (моложе ttl) или прочитать через fetch()."""
+    now = time.time()
+    hit = _vcache.get(key)
+    if hit and now - hit[0] < ttl:
+        return hit[1]
+    values = fetch()
+    _vcache[key] = (now, values)
+    return values
+
+
+def vdrop(*keys):
+    """Сбросить кэш: конкретные ключи или весь (без аргументов)."""
+    if not keys:
+        _vcache.clear()
+    for k in keys:
+        _vcache.pop(k, None)
 
 
 def _get_client():
