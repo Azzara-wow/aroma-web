@@ -11,6 +11,8 @@ import traceback
 
 from yandex_delivery import YandexDeliveryClient
 from yandex_delivery.errors import YandexDeliveryError
+from cdek_delivery import CdekClient
+from cdek_delivery.errors import CdekError
 
 import core
 import admin
@@ -141,6 +143,7 @@ def index(request: Request):
                     "pvz_address": user.get("pvz_address", ""),
                     "pvz_id": user.get("pvz_id", ""),
                     "tracking_url": user.get("tracking_url", ""),
+                    "carrier": user.get("carrier", "yandex"),
                 } if is_auth else {},
             },
         )
@@ -161,18 +164,22 @@ def index(request: Request):
 
 
 @app.get("/cities")
-def cities_search(request: Request, q: str = ""):
-    """JSON-автоподбор города Яндекса (location/detect) — [{geo_id, address}]."""
+def cities_search(request: Request, q: str = "", carrier: str = "yandex"):
+    """JSON-автоподбор города для выбранного перевозчика → [{code, label}].
+    code = geo_id (Яндекс) или числовой city_code (СДЭК)."""
     q = (q or "").strip()
     if len(q) < 2:
         return JSONResponse({"ok": False, "error": "Введите город"})
     try:
-        c = YandexDeliveryClient()
-        variants = c.detect_location(q)
-        data = [{"geo_id": v.get("geo_id"), "address": v.get("address", "")}
-                for v in variants if v.get("geo_id")]
-        return JSONResponse({"ok": True, "env": c.env, "cities": data})
-    except YandexDeliveryError as e:
+        if carrier == "cdek":
+            cities = CdekClient().suggest_cities(q)
+            data = [{"code": c.code, "label": c.full_name} for c in cities if c.code]
+        else:
+            variants = YandexDeliveryClient().detect_location(q)
+            data = [{"code": v.get("geo_id"), "label": v.get("address", "")}
+                    for v in variants if v.get("geo_id")]
+        return JSONResponse({"ok": True, "carrier": carrier, "cities": data})
+    except (YandexDeliveryError, CdekError) as e:
         return JSONResponse({"ok": False, "error": str(e)})
     except Exception as e:
         traceback.print_exc()
@@ -180,17 +187,26 @@ def cities_search(request: Request, q: str = ""):
 
 
 @app.get("/pvz")
-def pvz_search(request: Request, city: str = "", geo_id: int = 0):
-    """JSON-поиск ПВЗ Яндекса по городу или geo_id — для формы доставки."""
+def pvz_search(request: Request, carrier: str = "yandex", city_code: int = 0, city: str = ""):
+    """JSON-поиск ПВЗ выбранного перевозчика по коду города → [{id, name, address}].
+    id = platform_id (Яндекс) или code ПВЗ (СДЭК)."""
     try:
-        c = YandexDeliveryClient()  # окружение/токен из env (по умолчанию тест)
-        gid = geo_id or (c.geo_id(city.strip()) if city.strip() else 0)
-        if not gid:
-            return JSONResponse({"ok": False, "error": "Укажите город"})
-        points = c.list_pickup_points(geo_id=gid)
-        data = [{"id": p.id, "name": p.name, "address": p.full_address} for p in points[:300]]
-        return JSONResponse({"ok": True, "env": c.env, "count": len(points), "points": data})
-    except YandexDeliveryError as e:
+        if carrier == "cdek":
+            c = CdekClient()
+            code = city_code or (c.city_code(city.strip()) if city.strip() else None)
+            if not code:
+                return JSONResponse({"ok": False, "error": "Укажите город"})
+            points = c.list_pickup_points(city_code=code, is_handout=True, size=300)
+            data = [{"id": p.code, "name": p.name or "ПВЗ", "address": p.address_full} for p in points]
+        else:
+            c = YandexDeliveryClient()
+            gid = city_code or (c.geo_id(city.strip()) if city.strip() else 0)
+            if not gid:
+                return JSONResponse({"ok": False, "error": "Укажите город"})
+            points = c.list_pickup_points(geo_id=gid)
+            data = [{"id": p.id, "name": p.name, "address": p.full_address} for p in points[:300]]
+        return JSONResponse({"ok": True, "carrier": carrier, "count": len(data), "points": data})
+    except (YandexDeliveryError, CdekError) as e:
         return JSONResponse({"ok": False, "error": str(e)})
     except Exception as e:
         traceback.print_exc()
@@ -206,6 +222,7 @@ def save_delivery(
     city: str = Form(""),
     pvz_address: str = Form(""),
     pvz_id: str = Form(""),
+    carrier: str = Form("yandex"),
 ):
     """Сохранить данные доставки покупателя в лист «Покупатели» (личность из куки)."""
     user = auth.current_user(request)
@@ -213,7 +230,7 @@ def save_delivery(
         return RedirectResponse("/login", status_code=303)
     try:
         users.set_delivery(user["phone"], last_name, first_name, patronymic,
-                           city, pvz_address, pvz_id)
+                           city, pvz_address, pvz_id, carrier)
     except Exception:
         traceback.print_exc()
     return RedirectResponse("/?deliv=1", status_code=303)

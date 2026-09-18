@@ -50,6 +50,7 @@ COL_CITY = 10       # Город
 COL_PVZ_ADDR = 11   # ПВЗ адрес (человекочитаемо)
 COL_PVZ_ID = 12     # ПВЗ id (platform_id для API)
 COL_TRACKING = 13   # N — ссылка отслеживания (пишет дашборд после подтверждения доставки)
+COL_CARRIER = 14    # O — перевозчик выбранного ПВЗ: yandex | cdek
 
 HEADER = ["телефон", "имя", "код-хеш", "адрес", "роль", "создан", "заметка"]
 
@@ -169,6 +170,7 @@ def _row_to_user(row, idx: int) -> dict:
         "pvz_address": c(COL_PVZ_ADDR),
         "pvz_id": pvz_id,
         "tracking_url": c(COL_TRACKING),
+        "carrier": c(COL_CARRIER) or "yandex",
         # заполнено, если есть Фамилия+Имя+Отчество и выбран ПВЗ
         "delivery_complete": bool(last and first and patr and pvz_id),
     }
@@ -335,8 +337,8 @@ def update_address(phone_raw, address):
 
 
 def set_delivery(phone_raw, last_name="", first_name="", patronymic="",
-                 city="", pvz_address="", pvz_id=""):
-    """Записать данные доставки (ФИО + город + ПВЗ) в колонки H–M для телефона."""
+                 city="", pvz_address="", pvz_id="", carrier=""):
+    """Записать данные доставки (ФИО + город + ПВЗ) в H–M и перевозчика в O."""
     canon = normalize_phone(phone_raw)
     ws = _ws()
     values = _values()
@@ -348,5 +350,15 @@ def set_delivery(phone_raw, last_name="", first_name="", patronymic="",
         (last_name or "").strip(), (first_name or "").strip(), (patronymic or "").strip(),
         (city or "").strip(), (pvz_address or "").strip(), (pvz_id or "").strip(),
     ]])
+    if carrier:
+        # колонка O (15-я) — расширяем сетку, если её ещё нет (как для трека в N)
+        need = COL_CARRIER + 1
+        if ws.col_count < need:
+            ws.add_cols(need - ws.col_count)
+            try:
+                ws.update_acell(f"{sheets.col_a1(COL_CARRIER)}1", "перевозчик")
+            except Exception:
+                pass
+        ws.update_acell(f"{sheets.col_a1(COL_CARRIER)}{idx + 1}", carrier.strip())
     sheets.vdrop("users")
     return {"ok": True}

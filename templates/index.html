@@ -176,6 +176,10 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
 .deliv-panel input:focus{border-color:var(--clay-soft); box-shadow:0 0 0 3px rgba(180,106,85,.12)}
 .carrier-tag{display:inline-block; margin:4px 0 8px; padding:4px 10px; border-radius:999px;
   background:rgba(44,79,44,.08); color:var(--green); font-weight:700; font-size:12px}
+.carrier-toggle{display:flex; gap:8px; margin:4px 0 6px}
+.carrier-btn{flex:1; padding:10px; border-radius:6px; border:1px solid var(--line); background:var(--panel);
+  color:var(--ink); font-family:var(--sans); font-weight:700; font-size:14px; cursor:pointer}
+.carrier-btn.active{background:var(--green); color:#fbf6ec; border-color:var(--green)}
 .dc-find.wide{width:100%; margin-top:2px}
 #dv-city-results{margin:6px 0 2px}
 .mode.deliv-tab{color:var(--green); border-color:var(--line)}
@@ -366,8 +370,14 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
   {% if is_auth %}
   <div id="delivery-block" hidden>
     <form class="deliv-panel" method="POST" action="/delivery" onsubmit="return validDeliv()">
-      <div class="dc-sub">Данные для доставки Яндексом до пункта выдачи. Меняются только по кнопке «Сохранить».</div>
-      <div class="carrier-tag">🚚 Яндекс Доставка</div>
+      <div class="dc-sub">Данные для доставки до пункта выдачи. Меняются только по кнопке «Сохранить».</div>
+
+      <label>Перевозчик</label>
+      <div class="carrier-toggle" id="dv-carrier-wrap">
+        <button type="button" class="carrier-btn" data-carrier="yandex">🟡 Яндекс</button>
+        <button type="button" class="carrier-btn" data-carrier="cdek">🟢 СДЭК</button>
+      </div>
+      <input type="hidden" name="carrier" id="dv-carrier" value="{{ deliv.carrier or 'yandex' }}">
 
       <label>Фамилия</label>
       <input name="last_name" value="{{ deliv.last_name }}" autocomplete="family-name" required>
@@ -382,7 +392,7 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
         <button class="dc-find" type="button" onclick="citySearch()">Найти</button>
       </div>
       <div id="dv-city-results"></div>
-      <input type="hidden" id="dv-geo-id" value="">
+      <input type="hidden" id="dv-city-code" value="">
 
       <label>Пункт выдачи (ПВЗ)</label>
       <button class="dc-find wide" type="button" onclick="pvzSearch()">Найти ПВЗ в городе</button>
@@ -443,7 +453,29 @@ function showToast(text){
   setTimeout(() => t.classList.remove("show"), 1800);
 }
 
-// --- Данные для доставки: вкладка, город, ПВЗ ---
+// --- Данные для доставки: перевозчик, город, ПВЗ ---
+function currentCarrier(){ const e=document.getElementById("dv-carrier"); return (e&&e.value)||"yandex"; }
+function setCarrier(name, reset){
+  const e=document.getElementById("dv-carrier"); if(!e) return;
+  e.value = name;
+  document.querySelectorAll("#dv-carrier-wrap .carrier-btn").forEach(function(b){
+    b.classList.toggle("active", b.dataset.carrier === name);
+  });
+  if(reset !== false){  // ПВЗ у перевозчиков разные — при смене сбрасываем выбор
+    ["dv-city-code","dv-pvz-id","dv-pvz-address"].forEach(function(id){ const x=document.getElementById(id); if(x) x.value=""; });
+    document.getElementById("dv-city-results").innerHTML = "";
+    document.getElementById("dv-results").innerHTML = "";
+    document.getElementById("dv-chosen").textContent = "";
+    document.getElementById("dv-hint").textContent = "Выберите город, найдите ПВЗ, затем выберите пункт.";
+  }
+}
+function initCarrierUI(){
+  if(!document.getElementById("dv-carrier")) return;
+  document.querySelectorAll("#dv-carrier-wrap .carrier-btn").forEach(function(b){
+    b.addEventListener("click", function(){ setCarrier(b.dataset.carrier, true); });
+  });
+  setCarrier(document.getElementById("dv-carrier").value || "yandex", false);  // без сброса — сохраняем заполненное
+}
 function gotoDelivery(){
   curMode = "delivery"; applyView();
   const b = document.getElementById("delivery-block");
@@ -462,17 +494,17 @@ async function citySearch(){
   if(q.length < 2){ box.innerHTML = ""; return; }
   box.innerHTML = "<div class='dc-hint'>Ищу город…</div>";
   try{
-    const r = await fetch("/cities?q=" + encodeURIComponent(q));
+    const r = await fetch("/cities?carrier=" + currentCarrier() + "&q=" + encodeURIComponent(q));
     const d = await r.json();
     if(!d.ok || !d.cities.length){ box.innerHTML = "<div class='dc-hint'>Город не найден</div>"; return; }
     box.innerHTML = "";
     d.cities.forEach(function(cty){
       const b = document.createElement("button");
       b.type = "button"; b.className = "pvz-opt";
-      b.innerHTML = "<b>" + (cty.address || "") + "</b>";
+      b.innerHTML = "<b>" + (cty.label || "") + "</b>";
       b.addEventListener("click", function(){
-        document.getElementById("dv-geo-id").value = cty.geo_id;
-        document.getElementById("dv-city").value = cty.address || "";
+        document.getElementById("dv-city-code").value = cty.code;
+        document.getElementById("dv-city").value = cty.label || "";
         box.innerHTML = "";
         pvzSearch();
       });
@@ -482,15 +514,16 @@ async function citySearch(){
 }
 let _pvzAll = [];
 async function pvzSearch(){
-  const geo = document.getElementById("dv-geo-id").value;
+  const code = document.getElementById("dv-city-code").value;
   const city = document.getElementById("dv-city").value.trim();
   const hint = document.getElementById("dv-hint");
   const res = document.getElementById("dv-results");
-  if(!geo && !city){ hint.textContent = "Впишите город"; return; }
+  if(!code && !city){ hint.textContent = "Впишите город"; return; }
   hint.textContent = "Ищу пункты выдачи…"; res.innerHTML = ""; _pvzAll = [];
   try{
-    const url = geo ? ("/pvz?geo_id=" + encodeURIComponent(geo))
-                    : ("/pvz?city=" + encodeURIComponent(city));
+    const base = "/pvz?carrier=" + currentCarrier();
+    const url = code ? (base + "&city_code=" + encodeURIComponent(code))
+                     : (base + "&city=" + encodeURIComponent(city));
     const r = await fetch(url);
     const d = await r.json();
     if(!d.ok){ hint.textContent = "Ошибка: " + (d.error || "не удалось"); return; }
@@ -682,6 +715,7 @@ document.addEventListener("DOMContentLoaded", () => {
   search.addEventListener("input", applyView);
   search.addEventListener("keydown", e => { if (e.key === "Enter") e.preventDefault(); });
   restoreDrafts();   // вернуть незавершённый черновик
+  initCarrierUI();   // переключатель Яндекс/СДЭК в блоке «Доставка»
   applyView();
   refreshPreview();
   // после сохранения доставки возвращаемся на её вкладку с подтверждением
