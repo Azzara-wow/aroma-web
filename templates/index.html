@@ -184,6 +184,29 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
 #dv-city-results{margin:6px 0 2px}
 .mode.deliv-tab{color:var(--green); border-color:var(--line)}
 .mode.deliv-tab.active{background:var(--green); color:#fff; border-color:var(--green)}
+
+/* --- Доставка: статус + аккордеон --- */
+.deliv-wrap{padding:14px 18px 24px}
+.deliv-status{border-radius:10px; padding:14px 15px; margin-bottom:12px}
+.deliv-status.empty{background:rgba(180,106,85,.09); border:1px solid var(--clay-soft)}
+.deliv-status.filled{background:rgba(44,79,44,.07); border:1px solid var(--line)}
+.ds-title{font-family:var(--serif); font-size:17px; color:var(--green); font-weight:600; margin-bottom:6px}
+.deliv-status.empty .ds-title{color:var(--clay-deep)}
+.ds-sub{font-size:12.5px; color:var(--ink-soft); line-height:1.55}
+.ds-line{display:flex; gap:10px; font-size:13.5px; padding:6px 0; border-top:1px solid var(--line)}
+.ds-line:first-of-type{border-top:0}
+.ds-k{flex:0 0 90px; color:var(--ink-soft); font-weight:600}
+.ds-v{flex:1; color:var(--ink); word-break:break-word}
+.ds-track{display:block; margin-top:12px; padding:11px; text-align:center; border-radius:3px;
+  background:var(--green); color:#fbf6ec; text-decoration:none; font-weight:700}
+.deliv-acc-head{display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%;
+  padding:13px 15px; border-radius:8px; cursor:pointer; font-family:var(--sans); font-weight:700; font-size:14px;
+  background:transparent; color:var(--clay-deep); border:1px solid var(--clay-soft)}
+.deliv-acc-head.invite{background:var(--clay); color:#fff; border-color:var(--clay)}
+.deliv-acc-head .acc-chev{transition:transform .18s}
+.deliv-acc-head.open .acc-chev{transform:rotate(180deg)}
+.deliv-acc-body{margin-top:4px}
+.deliv-acc-body .deliv-panel{padding:12px 2px 4px}
 </style>
 </head>
 <body>
@@ -369,8 +392,36 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
 
   {% if is_auth %}
   <div id="delivery-block" hidden>
+   <div class="deliv-wrap">
+
+    <!-- Статус доставки: приглашение (пусто) или сводка (заполнено) -->
+    {% if delivery_complete %}
+    <div class="deliv-status filled">
+      <div class="ds-title">✓ Данные доставки заполнены</div>
+      <div class="ds-line"><span class="ds-k">Перевозчик</span><span class="ds-v">{{ 'СДЭК' if deliv.carrier == 'cdek' else 'Яндекс' }}</span></div>
+      {% if deliv.last_name or deliv.first_name %}<div class="ds-line"><span class="ds-k">Получатель</span><span class="ds-v">{{ deliv.last_name }} {{ deliv.first_name }} {{ deliv.patronymic }}</span></div>{% endif %}
+      {% if deliv.city %}<div class="ds-line"><span class="ds-k">Город</span><span class="ds-v">{{ deliv.city }}</span></div>{% endif %}
+      <div class="ds-line"><span class="ds-k">ПВЗ</span><span class="ds-v">{{ deliv.pvz_address }}</span></div>
+      {% if deliv.tracking_url %}
+      <a class="ds-track" href="{{ deliv.tracking_url }}" target="_blank" rel="noopener">🚚 Отследить посылку</a>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="deliv-status empty">
+      <div class="ds-title">📦 Заполните данные для отправки</div>
+      <div class="ds-sub">Чтобы мы могли отправить ваш заказ, укажите перевозчика, ФИО получателя, город и пункт выдачи (ПВЗ). Это займёт минуту — нажмите кнопку ниже.</div>
+    </div>
+    {% endif %}
+
+    <!-- Аккордеон с формой: свёрнут по умолчанию, чтобы не бояться пересохранить -->
+    <button type="button" class="deliv-acc-head {% if not delivery_complete %}invite{% endif %}" id="deliv-acc-head" aria-expanded="false" onclick="toggleDelivForm()">
+      <span>{% if delivery_complete %}✎ Изменить данные доставки{% else %}➕ Заполнить данные доставки{% endif %}</span>
+      <span class="acc-chev">▾</span>
+    </button>
+
+    <div class="deliv-acc-body" id="deliv-acc-body" hidden>
     <form class="deliv-panel" method="POST" action="/delivery" onsubmit="return validDeliv()">
-      <div class="dc-sub">Данные для доставки до пункта выдачи. Меняются только по кнопке «Сохранить».</div>
+      <div class="dc-sub">Ничего не сохранится, пока не нажмёте «Сохранить» внизу.</div>
 
       <label>Перевозчик</label>
       <div class="carrier-toggle" id="dv-carrier-wrap">
@@ -406,16 +457,10 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
       <div class="dc-actions">
         <button class="save" type="submit">Сохранить</button>
       </div>
-      {% if deliv.tracking_url %}
-      <a href="{{ deliv.tracking_url }}" target="_blank" rel="noopener"
-         style="display:block;margin-top:12px;padding:11px;text-align:center;border-radius:3px;
-                background:var(--green);color:#fbf6ec;text-decoration:none;font-weight:700">
-        🚚 Отследить посылку
-      </a>
-      {% else %}
-      <div class="dc-hint" style="margin-top:10px">Ссылка на отслеживание появится здесь после отправки. СДЭК добавим позже.</div>
-      {% endif %}
     </form>
+    </div>
+
+   </div>
   </div>
   {% endif %}
 
@@ -478,8 +523,20 @@ function initCarrierUI(){
 }
 function gotoDelivery(){
   curMode = "delivery"; applyView();
+  toggleDelivForm(true);   // с плашки «заполните» — сразу открываем форму
   const b = document.getElementById("delivery-block");
   if (b) b.scrollIntoView({behavior:"smooth", block:"start"});
+}
+// Аккордеон формы доставки: свёрнут по умолчанию, чтобы случайно не пересохранить.
+function toggleDelivForm(open){
+  const head = document.getElementById("deliv-acc-head");
+  const body = document.getElementById("deliv-acc-body");
+  if(!head || !body) return;
+  const willOpen = (open === true) ? true : (open === false ? false : body.hidden);
+  body.hidden = !willOpen;
+  head.classList.toggle("open", willOpen);
+  head.setAttribute("aria-expanded", willOpen ? "true" : "false");
+  if(willOpen) body.scrollIntoView({behavior:"smooth", block:"nearest"});
 }
 function validDeliv(){
   if(!document.getElementById("dv-pvz-id").value){
