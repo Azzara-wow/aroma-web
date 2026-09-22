@@ -147,6 +147,7 @@ def index(request: Request):
                     "carrier": user.get("carrier", "yandex"),
                     "email": user.get("email", ""),
                     "pay_link": user.get("pay_link", ""),
+                    "pay_amount": user.get("pay_amount", ""),
                 } if is_auth else {},
             },
         )

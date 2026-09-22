@@ -53,6 +53,7 @@ COL_TRACKING = 13   # N — ссылка отслеживания (пишет д
 COL_CARRIER = 14    # O — перевозчик выбранного ПВЗ: yandex | cdek
 COL_EMAIL = 15      # P — e-mail получателя (заполняет покупатель на витрине)
 COL_PAY_LINK = 16   # Q — ссылка на оплату (вносит организатор; покупатель видит «Оплатить»)
+COL_PAY_AMOUNT = 17 # R — сумма к оплате (пишет дашборд при загрузке ссылок)
 
 HEADER = ["телефон", "имя", "код-хеш", "адрес", "роль", "создан", "заметка"]
 
@@ -175,6 +176,7 @@ def _row_to_user(row, idx: int) -> dict:
         "carrier": c(COL_CARRIER) or "yandex",
         "email": c(COL_EMAIL),
         "pay_link": c(COL_PAY_LINK),
+        "pay_amount": c(COL_PAY_AMOUNT),
         # заполнено, если есть Фамилия+Имя+Отчество и выбран ПВЗ
         "delivery_complete": bool(last and first and patr and pvz_id),
     }

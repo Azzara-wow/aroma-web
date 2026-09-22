@@ -199,9 +199,10 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
 .ds-v{flex:1; color:var(--ink); word-break:break-word}
 .ds-track{display:block; margin-top:12px; padding:11px; text-align:center; border-radius:3px;
   background:var(--green); color:#fbf6ec; text-decoration:none; font-weight:700}
-.ds-pay{display:block; margin-bottom:12px; padding:14px; text-align:center; border-radius:6px;
-  background:var(--clay); color:#fff; text-decoration:none; font-weight:700; font-size:15px;
-  box-shadow:0 4px 12px rgba(180,106,85,.28)}
+.pay-cta{display:block; width:calc(100% - 36px); text-align:center; margin:12px 18px 0; padding:13px;
+  border-radius:3px; background:var(--green); color:#fbf6ec; text-decoration:none; font-size:14px; font-weight:700;
+  box-shadow:0 4px 12px rgba(44,79,44,.28); animation:pulse-green 1.9s ease-in-out infinite}
+@keyframes pulse-green{0%,100%{box-shadow:0 4px 12px rgba(44,79,44,.22)}50%{box-shadow:0 5px 20px rgba(44,79,44,.5)}}
 .deliv-acc-head{display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%;
   padding:13px 15px; border-radius:8px; cursor:pointer; font-family:var(--sans); font-weight:700; font-size:14px;
   background:transparent; color:var(--clay-deep); border:1px solid var(--clay-soft)}
@@ -230,6 +231,9 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
   {% if not is_auth %}<a class="login-cta" href="/login">Чтобы заказать и видеть «Моё» — войдите</a>{% endif %}
   {% if is_auth and not delivery_complete %}
     <button class="deliv-cta" type="button" onclick="gotoDelivery()">📦 Заполните данные для отправки — ФИО и ПВЗ Яндекс</button>
+  {% endif %}
+  {% if is_auth and deliv.pay_link %}
+    <a class="pay-cta" href="{{ deliv.pay_link }}" target="_blank" rel="noopener">💳 К оплате{% if deliv.pay_amount %}: {{ deliv.pay_amount }} ₽{% endif %} — оплатить заказ</a>
   {% endif %}
 
   <div class="hero">
@@ -396,11 +400,6 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
   {% if is_auth %}
   <div id="delivery-block" hidden>
    <div class="deliv-wrap">
-
-    <!-- Ссылка на оплату (вносит организатор) — покупатель видит и оплачивает -->
-    {% if deliv.pay_link %}
-    <a class="ds-pay" href="{{ deliv.pay_link }}" target="_blank" rel="noopener">💳 Оплатить заказ</a>
-    {% endif %}
 
     <!-- Статус доставки: приглашение (пусто) или сводка (заполнено) -->
     {% if delivery_complete %}
