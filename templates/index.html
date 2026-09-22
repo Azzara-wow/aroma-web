@@ -199,6 +199,9 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
 .ds-v{flex:1; color:var(--ink); word-break:break-word}
 .ds-track{display:block; margin-top:12px; padding:11px; text-align:center; border-radius:3px;
   background:var(--green); color:#fbf6ec; text-decoration:none; font-weight:700}
+.ds-pay{display:block; margin-bottom:12px; padding:14px; text-align:center; border-radius:6px;
+  background:var(--clay); color:#fff; text-decoration:none; font-weight:700; font-size:15px;
+  box-shadow:0 4px 12px rgba(180,106,85,.28)}
 .deliv-acc-head{display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%;
   padding:13px 15px; border-radius:8px; cursor:pointer; font-family:var(--sans); font-weight:700; font-size:14px;
   background:transparent; color:var(--clay-deep); border:1px solid var(--clay-soft)}
@@ -394,6 +397,11 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
   <div id="delivery-block" hidden>
    <div class="deliv-wrap">
 
+    <!-- Ссылка на оплату (вносит организатор) — покупатель видит и оплачивает -->
+    {% if deliv.pay_link %}
+    <a class="ds-pay" href="{{ deliv.pay_link }}" target="_blank" rel="noopener">💳 Оплатить заказ</a>
+    {% endif %}
+
     <!-- Статус доставки: приглашение (пусто) или сводка (заполнено) -->
     {% if delivery_complete %}
     <div class="deliv-status filled">
@@ -402,6 +410,8 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
       {% if deliv.last_name or deliv.first_name %}<div class="ds-line"><span class="ds-k">Получатель</span><span class="ds-v">{{ deliv.last_name }} {{ deliv.first_name }} {{ deliv.patronymic }}</span></div>{% endif %}
       {% if deliv.city %}<div class="ds-line"><span class="ds-k">Город</span><span class="ds-v">{{ deliv.city }}</span></div>{% endif %}
       <div class="ds-line"><span class="ds-k">ПВЗ</span><span class="ds-v">{{ deliv.pvz_address }}</span></div>
+      {% if deliv.email %}<div class="ds-line"><span class="ds-k">E-mail</span><span class="ds-v">{{ deliv.email }}</span></div>
+      {% else %}<div class="ds-line"><span class="ds-k">E-mail</span><span class="ds-v" style="color:var(--clay-deep)">не указан — добавьте для оплаты</span></div>{% endif %}
       {% if deliv.tracking_url %}
       <a class="ds-track" href="{{ deliv.tracking_url }}" target="_blank" rel="noopener">🚚 Отследить посылку</a>
       {% endif %}
@@ -409,7 +419,7 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
     {% else %}
     <div class="deliv-status empty">
       <div class="ds-title">📦 Заполните данные для отправки</div>
-      <div class="ds-sub">Чтобы мы могли отправить ваш заказ, укажите перевозчика, ФИО получателя, город и пункт выдачи (ПВЗ). Это займёт минуту — нажмите кнопку ниже.</div>
+      <div class="ds-sub">Чтобы мы могли отправить ваш заказ и прислать ссылку на оплату, укажите перевозчика, ФИО получателя, город, пункт выдачи (ПВЗ) и <b>e-mail</b>. Это займёт минуту — нажмите кнопку ниже.</div>
     </div>
     {% endif %}
 
@@ -444,6 +454,10 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
       </div>
       <div id="dv-city-results"></div>
       <input type="hidden" id="dv-city-code" value="">
+
+      <label>E-mail для оплаты</label>
+      <input name="email" type="email" value="{{ deliv.email }}" placeholder="you@example.com" autocomplete="email" inputmode="email">
+      <div class="dc-hint">Обязательно укажите e-mail — на него придёт ссылка на оплату заказа. Без него оплатить не получится.</div>
 
       <label>Пункт выдачи (ПВЗ)</label>
       <button class="dc-find wide" type="button" onclick="pvzSearch()">Найти ПВЗ в городе</button>

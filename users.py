@@ -51,6 +51,8 @@ COL_PVZ_ADDR = 11   # ПВЗ адрес (человекочитаемо)
 COL_PVZ_ID = 12     # ПВЗ id (platform_id для API)
 COL_TRACKING = 13   # N — ссылка отслеживания (пишет дашборд после подтверждения доставки)
 COL_CARRIER = 14    # O — перевозчик выбранного ПВЗ: yandex | cdek
+COL_EMAIL = 15      # P — e-mail получателя (заполняет покупатель на витрине)
+COL_PAY_LINK = 16   # Q — ссылка на оплату (вносит организатор; покупатель видит «Оплатить»)
 
 HEADER = ["телефон", "имя", "код-хеш", "адрес", "роль", "создан", "заметка"]
 
@@ -171,6 +173,8 @@ def _row_to_user(row, idx: int) -> dict:
         "pvz_id": pvz_id,
         "tracking_url": c(COL_TRACKING),
         "carrier": c(COL_CARRIER) or "yandex",
+        "email": c(COL_EMAIL),
+        "pay_link": c(COL_PAY_LINK),
         # заполнено, если есть Фамилия+Имя+Отчество и выбран ПВЗ
         "delivery_complete": bool(last and first and patr and pvz_id),
     }
@@ -336,9 +340,20 @@ def update_address(phone_raw, address):
     return {"ok": True}
 
 
+def _ensure_col(ws, col_idx0, header):
+    """Расширить сетку листа до колонки col_idx0 включительно и подписать шапку."""
+    need = col_idx0 + 1
+    if ws.col_count < need:
+        ws.add_cols(need - ws.col_count)
+        try:
+            ws.update_acell(f"{sheets.col_a1(col_idx0)}1", header)
+        except Exception:
+            pass
+
+
 def set_delivery(phone_raw, last_name="", first_name="", patronymic="",
-                 city="", pvz_address="", pvz_id="", carrier=""):
-    """Записать данные доставки (ФИО + город + ПВЗ) в H–M и перевозчика в O."""
+                 city="", pvz_address="", pvz_id="", carrier="", email=""):
+    """Записать данные доставки (ФИО + город + ПВЗ) в H–M, перевозчика в O, email в P."""
     canon = normalize_phone(phone_raw)
     ws = _ws()
     values = _values()
@@ -351,14 +366,10 @@ def set_delivery(phone_raw, last_name="", first_name="", patronymic="",
         (city or "").strip(), (pvz_address or "").strip(), (pvz_id or "").strip(),
     ]])
     if carrier:
-        # колонка O (15-я) — расширяем сетку, если её ещё нет (как для трека в N)
-        need = COL_CARRIER + 1
-        if ws.col_count < need:
-            ws.add_cols(need - ws.col_count)
-            try:
-                ws.update_acell(f"{sheets.col_a1(COL_CARRIER)}1", "перевозчик")
-            except Exception:
-                pass
+        _ensure_col(ws, COL_CARRIER, "перевозчик")
         ws.update_acell(f"{sheets.col_a1(COL_CARRIER)}{idx + 1}", carrier.strip())
+    # email покупатель может заполнить/очистить в форме доставки (колонка P)
+    _ensure_col(ws, COL_EMAIL, "email")
+    ws.update_acell(f"{sheets.col_a1(COL_EMAIL)}{idx + 1}", (email or "").strip())
     sheets.vdrop("users")
     return {"ok": True}

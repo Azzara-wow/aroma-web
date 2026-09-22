@@ -145,6 +145,8 @@ def index(request: Request):
                     "pvz_id": user.get("pvz_id", ""),
                     "tracking_url": user.get("tracking_url", ""),
                     "carrier": user.get("carrier", "yandex"),
+                    "email": user.get("email", ""),
+                    "pay_link": user.get("pay_link", ""),
                 } if is_auth else {},
             },
         )
@@ -239,6 +241,7 @@ def save_delivery(
     pvz_address: str = Form(""),
     pvz_id: str = Form(""),
     carrier: str = Form("yandex"),
+    email: str = Form(""),
 ):
     """Сохранить данные доставки покупателя в лист «Покупатели» (личность из куки)."""
     user = auth.current_user(request)
@@ -246,7 +249,7 @@ def save_delivery(
         return RedirectResponse("/login", status_code=303)
     try:
         users.set_delivery(user["phone"], last_name, first_name, patronymic,
-                           city, pvz_address, pvz_id, carrier)
+                           city, pvz_address, pvz_id, carrier, email)
     except Exception:
         traceback.print_exc()
     return RedirectResponse("/?deliv=1", status_code=303)
