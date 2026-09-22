@@ -84,6 +84,16 @@ def index(request: Request):
             x["ordered_ml"] = mine.get(x["aroma_name"], 0)
             x["is_dobor"] = "добор" in x["status"]
 
+        # Текущая сумма заказа покупателя по закупке (по тем же ступеням, что и цены).
+        zakupka_mine_sum = 0
+        if is_auth:
+            for x in all_rows:
+                om = x.get("ordered_ml") or 0
+                if om > 0:
+                    pr = core.price_of_position(x["category"], om, x.get("per_ml"), x.get("price"))
+                    if pr.get("ok"):
+                        zakupka_mine_sum += pr["amount"]
+
         # Отдаём ВЕСЬ видимый список; вкладки и «Моё» фильтрует браузер (быстро).
         visible = [x for x in all_rows if x["status"] not in ("hide", "сервис")]
 
@@ -124,6 +134,7 @@ def index(request: Request):
                 "aromas": visible,
                 "nalichie": nalichie_items,
                 "nal_mine_sum": nal_mine_sum,
+                "zakupka_mine_sum": zakupka_mine_sum,
                 "catalog_items": catalog_items,
                 "info_items": info_items,
                 "user_name": user["name"] if is_auth else "",

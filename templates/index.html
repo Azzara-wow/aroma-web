@@ -211,6 +211,11 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
 .deliv-acc-head.open .acc-chev{transform:rotate(180deg)}
 .deliv-acc-body{margin-top:4px}
 .deliv-acc-body .deliv-panel{padding:12px 2px 4px}
+.mine-sum{margin:0 18px 10px; padding:11px 14px; border-radius:8px; background:rgba(44,79,44,.07);
+  border:1px solid var(--line); font-size:14px; color:var(--ink)}
+.mine-sum b{color:var(--green); font-size:16px}
+.mine-sum .ms-nal{color:var(--ink-soft)}
+.mine-sum .ms-note{margin-top:5px; font-size:11.5px; color:var(--ink-soft); line-height:1.5}
 </style>
 </head>
 <body>
@@ -261,6 +266,14 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
   </div>
 
   <div class="seclabel"><span id="heading-main">Все ароматы</span> <span>Витрина</span></div>
+
+  {% if is_auth %}
+  <div id="mine-sum" class="mine-sum" hidden>
+    💰 Ваш заказ по закупке: <b>{{ zakupka_mine_sum }} ₽</b>
+    {% if nal_mine_sum %}<span class="ms-nal"> · наличие: {{ nal_mine_sum }} ₽</span>{% endif %}
+    <div class="ms-note">Сумма пересчитывается по мере заказа. К оплате — когда организатор пришлёт ссылку.</div>
+  </div>
+  {% endif %}
 
   <ul class="list" id="list">
   {% for aroma in aromas %}
@@ -666,6 +679,10 @@ function applyView(){
   const delivBlock = document.getElementById("delivery-block");
   if (infoBlock) infoBlock.hidden = !infoTab;
   if (delivBlock) delivBlock.hidden = !delivMode;
+
+  // Сумма заказа — только во вкладке «Моё»
+  const mineSum = document.getElementById("mine-sum");
+  if (mineSum) mineSum.hidden = (curMode !== "mine");
 
   // в режиме «Доставка» прячем витрину целиком, показываем только блок доставки
   const listEl = document.getElementById("list");
