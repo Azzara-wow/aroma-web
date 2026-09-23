@@ -258,18 +258,31 @@ def save_delivery(
     pvz_address: str = Form(""),
     pvz_id: str = Form(""),
     carrier: str = Form("yandex"),
-    email: str = Form(""),
 ):
-    """Сохранить данные доставки покупателя в лист «Покупатели» (личность из куки)."""
+    """Сохранить данные доставки покупателя (ФИО+город+ПВЗ). E-mail — отдельно."""
     user = auth.current_user(request)
     if not user:
         return RedirectResponse("/login", status_code=303)
     try:
         users.set_delivery(user["phone"], last_name, first_name, patronymic,
-                           city, pvz_address, pvz_id, carrier, email)
+                           city, pvz_address, pvz_id, carrier)
     except Exception:
         traceback.print_exc()
     return RedirectResponse("/?deliv=1", status_code=303)
+
+
+@app.post("/delivery/email")
+def save_email(request: Request, email: str = Form("")):
+    """Сохранить только e-mail (отдельная кнопка, AJAX). Личность — из куки."""
+    user = auth.current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "error": "not_authenticated"}, status_code=401)
+    try:
+        users.set_email(user["phone"], email)
+    except Exception:
+        traceback.print_exc()
+        return JSONResponse({"ok": False, "error": "save_failed"}, status_code=500)
+    return JSONResponse({"ok": True, "email": (email or "").strip()})
 
 
 class OrderIn(BaseModel):

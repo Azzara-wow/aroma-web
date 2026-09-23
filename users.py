@@ -354,8 +354,9 @@ def _ensure_col(ws, col_idx0, header):
 
 
 def set_delivery(phone_raw, last_name="", first_name="", patronymic="",
-                 city="", pvz_address="", pvz_id="", carrier="", email=""):
-    """Записать данные доставки (ФИО + город + ПВЗ) в H–M, перевозчика в O, email в P."""
+                 city="", pvz_address="", pvz_id="", carrier=""):
+    """Записать данные доставки (ФИО + город + ПВЗ) в H–M, перевозчика в O.
+    E-mail сохраняется отдельно (set_email) — здесь не трогаем."""
     canon = normalize_phone(phone_raw)
     ws = _ws()
     values = _values()
@@ -370,7 +371,17 @@ def set_delivery(phone_raw, last_name="", first_name="", patronymic="",
     if carrier:
         _ensure_col(ws, COL_CARRIER, "перевозчик")
         ws.update_acell(f"{sheets.col_a1(COL_CARRIER)}{idx + 1}", carrier.strip())
-    # email покупатель может заполнить/очистить в форме доставки (колонка P)
+    sheets.vdrop("users")
+    return {"ok": True}
+
+
+def set_email(phone_raw, email=""):
+    """Записать только e-mail покупателя (колонка P). Отдельная кнопка на витрине."""
+    canon = normalize_phone(phone_raw)
+    ws = _ws()
+    idx = _find_row(_values(), canon)
+    if idx is None:
+        return {"ok": False, "reason": "not_found"}
     _ensure_col(ws, COL_EMAIL, "email")
     ws.update_acell(f"{sheets.col_a1(COL_EMAIL)}{idx + 1}", (email or "").strip())
     sheets.vdrop("users")

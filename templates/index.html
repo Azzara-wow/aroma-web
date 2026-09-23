@@ -211,6 +211,15 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
 .deliv-acc-head.open .acc-chev{transform:rotate(180deg)}
 .deliv-acc-body{margin-top:4px}
 .deliv-acc-body .deliv-panel{padding:12px 2px 4px}
+.email-box{padding:14px 14px 12px; margin-bottom:6px; background:rgba(180,106,85,.07);
+  border:1px solid var(--clay-soft); border-radius:10px}
+.email-box label{display:block; font-size:13px; color:var(--clay-deep); font-weight:700; margin:0 0 6px}
+.email-box input{width:100%; padding:11px 12px; font-size:16px; font-family:var(--sans); color:var(--ink);
+  background:var(--cream); border:1px solid var(--line); border-radius:6px; outline:none}
+.email-box input:focus{border-color:var(--clay-soft); box-shadow:0 0 0 3px rgba(180,106,85,.12)}
+.save-email{display:block; width:100%; margin-top:10px; padding:12px; border:0; border-radius:3px;
+  background:var(--clay); color:#fff; font-family:var(--sans); font-weight:700; font-size:15px; cursor:pointer}
+.dc-actions .save-deliv{background:var(--green)}
 .mine-sum{margin:0 18px 10px; padding:11px 14px; border-radius:8px; background:rgba(44,79,44,.07);
   border:1px solid var(--line); font-size:14px; color:var(--ink)}
 .mine-sum b{color:var(--green); font-size:16px}
@@ -455,12 +464,16 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
     </button>
 
     <div class="deliv-acc-body" id="deliv-acc-body" hidden>
-    <form class="deliv-panel" method="POST" action="/delivery" onsubmit="return validDeliv()">
-      <div class="dc-sub">Ничего не сохранится, пока не нажмёте «Сохранить» внизу.</div>
 
+    <div class="email-box">
       <label>📧 E-mail для оплаты</label>
-      <input name="email" type="email" value="{{ deliv.email }}" placeholder="you@example.com" autocomplete="email" inputmode="email">
+      <input id="dv-email" type="email" value="{{ deliv.email }}" placeholder="you@example.com" autocomplete="email" inputmode="email">
       <div class="dc-hint">Обязательно укажите e-mail — на него придёт ссылка на оплату заказа. Без него оплатить не получится.</div>
+      <button type="button" class="save-email" onclick="saveEmail()">💾 Сохранить e-mail</button>
+    </div>
+
+    <form class="deliv-panel" method="POST" action="/delivery" onsubmit="return validDeliv()">
+      <div class="dc-sub">Перевозчик, ФИО и пункт выдачи — сохраняются кнопкой «Сохранить данные доставки» внизу.</div>
 
       <label>Перевозчик</label>
       <div class="carrier-toggle" id="dv-carrier-wrap">
@@ -494,7 +507,7 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
       <input type="hidden" name="pvz_address" id="dv-pvz-address" value="{{ deliv.pvz_address }}">
 
       <div class="dc-actions">
-        <button class="save" type="submit">Сохранить</button>
+        <button class="save save-deliv" type="submit">Сохранить данные доставки</button>
       </div>
     </form>
     </div>
@@ -593,6 +606,24 @@ function toggleDelivForm(open){
   head.classList.toggle("open", willOpen);
   head.setAttribute("aria-expanded", willOpen ? "true" : "false");
   if(willOpen) body.scrollIntoView({behavior:"smooth", block:"nearest"});
+}
+// Отдельное сохранение e-mail (без перезагрузки, чтобы не терять недозаполненный ПВЗ)
+async function saveEmail(){
+  const inp = document.getElementById("dv-email");
+  const btn = document.querySelector(".save-email");
+  const email = (inp.value || "").trim();
+  if(btn){ btn.disabled = true; }
+  try{
+    const fd = new FormData();
+    fd.append("email", email);
+    const r = await fetch("/delivery/email", { method: "POST", body: fd });
+    const d = await r.json();
+    showToast(d.ok ? "E-mail сохранён ✓" : "Не удалось сохранить");
+  }catch(e){
+    showToast("Сбой сети — попробуйте ещё раз");
+  }finally{
+    if(btn){ btn.disabled = false; }
+  }
 }
 function validDeliv(){
   if(!document.getElementById("dv-pvz-id").value){
