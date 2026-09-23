@@ -89,10 +89,21 @@ def _gid_from_url(sheet_url: str):
 
 
 import time
+import source_state
 
 # Короткий кэш Ассортимента: он меняется редко, а витрина дёргает его часто.
 LOAD_TTL_SECONDS = 60
-_data_cache = {"df": None, "ts": 0.0}
+_data_cache = {}   # эффективный url -> {"df": DataFrame, "ts": float}
+
+
+def current_source_url() -> str:
+    """Активная книга закупки: своя ссылка из настройки или SHEET_URL из кода."""
+    return source_state.get_url(SHEET_URL)
+
+
+def reset_data_cache():
+    """Сбросить кэш Ассортимента — вызывать после смены книги закупки."""
+    _data_cache.clear()
 
 
 def load_data(sheet_url: str = None) -> pd.DataFrame:
@@ -100,19 +111,20 @@ def load_data(sheet_url: str = None) -> pd.DataFrame:
     Ассортимент через сервисный аккаунт (книга на Шаге 3 приватная — публичного
     CSV больше нет). Возвращаем DataFrame БЕЗ шапки (header=None по духу): строки
     и столбцы читаются по позициям, ровно как раньше из CSV.
-    Лист выбираем по gid из SHEET_URL; если gid нет — первый лист книги.
-    Результат кэшируется на LOAD_TTL_SECONDS (только для основного SHEET_URL).
+    Активную книгу берём из source_state (или SHEET_URL из кода); лист — по gid
+    из ссылки, иначе первый лист. Кэш — на LOAD_TTL_SECONDS, по эффективному url.
     """
     import sheets  # локальный импорт: sheets импортирует core, разрываем цикл
 
-    url = sheet_url or SHEET_URL
+    url = sheet_url or current_source_url()
     now = time.time()
-    if url == SHEET_URL and _data_cache["df"] is not None \
-            and now - _data_cache["ts"] < LOAD_TTL_SECONDS:
-        return _data_cache["df"]
+    c = _data_cache.get(url)
+    if c is not None and now - c["ts"] < LOAD_TTL_SECONDS:
+        return c["df"]
 
     gid = _gid_from_url(url)
-    ws = sheets.worksheet_by_gid(gid) if gid is not None else sheets.open_book().sheet1
+    # ВАЖНО: передаём url и в лист, и в книгу — иначе другая книга откроется в старой.
+    ws = sheets.worksheet_by_gid(gid, url) if gid is not None else sheets.open_book(url).sheet1
 
     values = ws.get_all_values()  # список строк, все клетки — строки
     # Выравниваем строки по ширине самой длинной (get_all_values иногда даёт
@@ -121,9 +133,7 @@ def load_data(sheet_url: str = None) -> pd.DataFrame:
     values = [r + [""] * (width - len(r)) for r in values]
     df = pd.DataFrame(values, dtype=str)
 
-    if url == SHEET_URL:
-        _data_cache["df"] = df
-        _data_cache["ts"] = now
+    _data_cache[url] = {"df": df, "ts": now}
     return df
 
 
@@ -314,6 +324,10 @@ def prepare_dataframe(df: pd.DataFrame, user_name: str = ""):
             "per_ml": per_ml,
             "collected": collected,
             "remaining": target,
+            # Стабильная цель набора = пара из ОДНОГО снимка листа (набрано+осталось).
+            # В сумме постоянна, даже пока формула «осталось» пересчитывается с задержкой,
+            # поэтому «из N» не дрожит после заказа. См. main.py: remaining берём от неё.
+            "goal": collected + target,
             "ordered_ml": ordered_ml,
             "note": note,
             "is_new": "новинка" in note.lower(),

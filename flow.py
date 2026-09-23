@@ -223,6 +223,47 @@ def pair_volume(phone_raw, aroma):
     return int(_net_pair(_values(), phone, aroma))
 
 
+def buyers_of_aroma(aroma):
+    """
+    Кто набрал этот аромат — очередь для организатора.
+    Возвращает список [{phone, name, ml, first_ts, last_ts}] c net>0,
+    отсортированный ПО ОЧЕРЕДИ (кто раньше встал — выше; свежие внизу, режем с конца).
+    first_ts — когда покупатель впервые взял аромат (позиция в очереди),
+    last_ts — последний заказ по нему (для добора). Метка времени уже есть в Потоке.
+    """
+    values = _values()
+    ta = core.norm(aroma).lower()
+    agg = {}  # phone -> запись
+    for r in range(1, len(values)):
+        row = _pad(values[r])
+        if core.norm(row[COL_AROMA]).lower() != ta:
+            continue
+        phone = users.normalize_phone(row[COL_PHONE])
+        if not users.valid_phone(phone):
+            continue
+        vol = core.to_num(row[COL_VOLUME])
+        signed = -vol if core.norm(row[COL_DIRECTION]).lower() == DIR_MINUS else vol
+        ts = core.norm(row[COL_TS])
+        name = core.norm(row[COL_NAME])
+        e = agg.get(phone)
+        if e is None:
+            e = {"phone": phone, "name": name, "ml": 0, "first_ts": ts, "last_ts": ts}
+            agg[phone] = e
+        if name:
+            e["name"] = name  # снимок имени — последний непустой
+        e["ml"] += signed
+        if ts:
+            if not e["first_ts"] or ts < e["first_ts"]:
+                e["first_ts"] = ts
+            if not e["last_ts"] or ts > e["last_ts"]:
+                e["last_ts"] = ts
+    out = [e for e in agg.values() if e["ml"] > 0]
+    for e in out:
+        e["ml"] = int(e["ml"])
+    out.sort(key=lambda e: (e["first_ts"] or "", e["name"].lower()))
+    return out
+
+
 def pair_and_collected(phone_raw, aroma):
     """За одно чтение: остаток пары (телефон, аромат) и всего набрано по аромату.
     Для формы организатора ('покажу, сколько уже есть')."""

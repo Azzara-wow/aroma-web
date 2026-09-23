@@ -22,6 +22,7 @@ import nalichie
 import catalog
 import notify
 import orders_state
+import source_state
 
 
 # ---------- покупатель по имени (не по телефону) ----------
@@ -162,19 +163,26 @@ def build_invoices():
 
 # ---------- маршруты ----------
 
+def _admin_ctx(request, **extra):
+    """Общий контекст страницы закупки (чтобы блоки статуса были и после /admin/add)."""
+    ctx = {
+        "request": request,
+        "aromas": _live_aromas(),
+        "users_list": _buyer_options(),
+        "orders_open": orders_state.is_open(),
+        "source_url": core.current_source_url(),
+        "source_custom": source_state.is_custom(),
+        "source_result": request.query_params.get("src"),
+    }
+    ctx.update(extra)
+    return ctx
+
+
 @router.get("/admin", response_class=HTMLResponse)
 def admin_page(request: Request):
     if not _require_admin(request):
         return RedirectResponse("/login", status_code=303)
-    return templates.TemplateResponse(
-        "admin.html",
-        {
-            "request": request,
-            "aromas": _live_aromas(),
-            "users_list": _buyer_options(),
-            "orders_open": orders_state.is_open(),
-        },
-    )
+    return templates.TemplateResponse("admin.html", _admin_ctx(request))
 
 
 @router.post("/admin/orders")
@@ -184,6 +192,87 @@ def admin_orders_toggle(request: Request, action: str = Form(...)):
         return RedirectResponse("/login", status_code=303)
     orders_state.set_open(action == "open")
     return RedirectResponse("/admin", status_code=303)
+
+
+@router.post("/admin/source")
+def admin_source(request: Request, url: str = Form(""), action: str = Form("set")):
+    """Сменить активную книгу закупки (action=set) или вернуть ссылку из кода (reset).
+    Меняется без правки сервера и без рестарта; кэш Ассортимента сбрасываем сразу."""
+    if not _require_admin(request):
+        return RedirectResponse("/login", status_code=303)
+    if action == "reset":
+        source_state.reset()
+        core.reset_data_cache()
+        return RedirectResponse("/admin?src=reset", status_code=303)
+    ok = source_state.set_url(url)
+    if ok:
+        core.reset_data_cache()
+    return RedirectResponse(f"/admin?src={'ok' if ok else 'bad'}", status_code=303)
+
+
+def _current_names():
+    """Телефон -> текущее имя из «Покупателей» (для читаемых списков организатора)."""
+    try:
+        return {u["phone"]: u["name"] for u in users.list_users() if u["name"]}
+    except Exception:
+        return {}
+
+
+@router.get("/admin/by_aroma")
+def admin_by_aroma(request: Request, aroma: str):
+    """Кто набрал аромат — очередь с временем (для режима «Убрать» и раскрытия витрины)."""
+    if not _require_admin(request):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+    try:
+        names = _current_names()
+        buyers = []
+        for e in flow.buyers_of_aroma(aroma):
+            buyers.append({
+                "phone": e["phone"],
+                "name": names.get(e["phone"]) or e["name"] or e["phone"],
+                "ml": e["ml"],
+                "ts": e.get("first_ts", ""),
+                "last_ts": e.get("last_ts", ""),
+            })
+        total = sum(b["ml"] for b in buyers)
+        return {"ok": True, "aroma": aroma, "buyers": buyers, "total": total}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+@router.get("/admin/by_buyer")
+def admin_by_buyer(request: Request, phone: str):
+    """Что набрала девочка — её ароматы с объёмами (для режима «Убрать» по имени)."""
+    if not _require_admin(request):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+    try:
+        phone_val, name = _resolve_buyer(phone, _buyer_options())
+        if not phone_val:
+            return {"ok": False, "error": "Покупатель не найден"}
+        name = _current_names().get(phone_val) or name or phone_val
+        positions = flow.buyer_positions(phone_val)
+        aromas = [{"aroma": a, "ml": int(v)} for a, v in positions.items()]
+        aromas.sort(key=lambda x: x["aroma"].lower())
+        return {"ok": True, "phone": phone_val, "name": name, "aromas": aromas}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+@router.post("/admin/cut")
+def admin_cut(request: Request,
+              phone: str = Form(...), aroma: str = Form(...),
+              volume: str = Form(...), name: str = Form("")):
+    """Отрезать объём у конкретной пары (телефон, аромат) — строка 'минус' в Поток.
+    Живой ответ JSON, чтобы список в «Убрать» обновлялся без перезагрузки."""
+    if not _require_admin(request):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+    try:
+        res = flow.add_order(phone, name, aroma, volume, direction=flow.DIR_MINUS)
+        if not res.get("ok"):
+            res["error"] = res.get("reason", "ошибка")
+        return res
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
 
 @router.get("/admin/buyers", response_class=HTMLResponse)
@@ -278,13 +367,7 @@ def admin_add(
 
     return templates.TemplateResponse(
         "admin.html",
-        {
-            "request": request,
-            "aromas": _live_aromas(),
-            "users_list": options,
-            "result": result,
-            "last_phone": phone,
-        },
+        _admin_ctx(request, users_list=options, result=result, last_phone=phone),
     )
 
 

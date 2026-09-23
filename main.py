@@ -82,6 +82,9 @@ def index(request: Request):
         collected, mine = flow.board(user["phone"] if is_auth else None)
         for x in all_rows:
             x["collected"] = collected.get(x["aroma_name"], 0)
+            # «Осталось» считаем от СТАБИЛЬНОЙ цели минус ЖИВОЕ набрано (не от лагающей
+            # формулы листа) — иначе цель «из N» дрожит вверх сразу после заказа.
+            x["remaining"] = max(x.get("goal", 0) - x["collected"], 0)
             x["ordered_ml"] = mine.get(x["aroma_name"], 0)
             x["is_dobor"] = "добор" in x["status"]
 

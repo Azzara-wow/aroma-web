@@ -6,15 +6,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body {font-family: system-ui, -apple-system, sans-serif; margin:0; padding:16px; background:#0e1117; color:#fff; max-width:640px;}
-        h1 {font-size:18px; margin:0 0 16px;}
+        h1 {font-size:18px; margin:0 0 12px;}
         label {display:block; font-size:13px; opacity:0.7; margin:12px 0 4px;}
-        input[type=text], input[type=number] {width:100%; padding:12px; font-size:16px; border-radius:8px; border:none; box-sizing:border-box;}
+        input[type=text], input[type=number], input[type=url] {width:100%; padding:12px; font-size:16px; border-radius:8px; border:none; box-sizing:border-box;}
         .current {margin:12px 0; padding:10px 12px; background:#1a1d23; border-radius:8px; font-size:14px; line-height:1.5; min-height:20px;}
         .current .hl {color:#8ab4f7; font-weight:600;}
         .buttons {display:flex; gap:10px; margin-top:14px;}
-        button {flex:1; padding:14px; border-radius:8px; border:none; font-size:16px; font-weight:600; cursor:pointer; color:#fff;}
-        .add {background:#2f6f3e;}
-        .sub {background:#7a2f2f;}
+        button {padding:14px; border-radius:8px; border:none; font-size:16px; font-weight:600; cursor:pointer; color:#fff;}
+        .add {background:#2f6f3e; flex:1;}
+        .sub {background:#7a2f2f; flex:1;}
         .result {margin:14px 0; padding:12px; border-radius:8px; font-size:15px;}
         .result.ok {background:rgba(80,180,100,0.18);}
         .result.err {background:rgba(200,80,80,0.20);}
@@ -23,6 +23,32 @@
         .log-item {padding:8px 10px; border-bottom:1px solid #2a2d34; font-size:14px;}
         .nav {margin-bottom:12px; font-size:13px;}
         .nav a {color:#8ab4f7; text-decoration:none;}
+        /* переключатель режимов Добавить/Убрать */
+        .modesw {display:flex; gap:8px; margin:6px 0 14px;}
+        .modesw button {flex:1; padding:12px; background:#1a1d23; color:#9aa4b2; box-shadow:inset 0 0 0 1px #2a2f38;}
+        .modesw button.on.add {background:#2f6f3e; color:#fff; box-shadow:none;}
+        .modesw button.on.sub {background:#7a2f2f; color:#fff; box-shadow:none;}
+        /* подрежимы поиска */
+        .subsw {display:flex; gap:8px; margin:4px 0 10px;}
+        .subsw button {flex:1; padding:10px; font-size:14px; background:#1a1d23; color:#9aa4b2; box-shadow:inset 0 0 0 1px #2a2f38;}
+        .subsw button.on {background:#2a2f38; color:#fff; box-shadow:none;}
+        .findbar {display:flex; gap:8px; align-items:flex-end;}
+        .findbar input {flex:1;}
+        .findbar button {background:#3a4150; padding:12px 16px; font-size:15px;}
+        .hint {font-size:12px; opacity:.6; margin:8px 0;}
+        .rows {margin-top:12px;}
+        .rw {padding:10px 12px; border-bottom:1px solid #2a2d34; display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center;}
+        .rw-main {flex:1 1 100%; font-size:15px;}
+        .rw-main b {color:#fff;}
+        .rw-main .q {color:#8ab4f7; font-weight:700;}
+        .rw-main .t {opacity:.5; font-size:12px;}
+        .rw-cut {display:flex; gap:8px; align-items:center; flex:1 1 100%;}
+        .rw-cut input {width:90px; padding:8px; text-align:center;}
+        .rw-cut .cut {background:#7a2f2f; padding:8px 12px; font-size:14px;}
+        .rw-cut .all {background:#3a4150; padding:8px 12px; font-size:14px;}
+        .rw.done {opacity:.4;}
+        .totline {font-size:13px; opacity:.75; margin:6px 0 2px;}
+        summary {cursor:pointer;}
     </style>
 </head>
 <body>
@@ -33,21 +59,40 @@
     <a href="/admin/nalichie" style="flex:1; text-align:center; padding:10px; border-radius:8px; text-decoration:none; background:#1a1d23; color:#8ab4f7;">Наличие</a>
     <a href="/admin/invoices" style="flex:1; text-align:center; padding:10px; border-radius:8px; text-decoration:none; background:#1a1d23; color:#8ab4f7;">Счета</a>
 </div>
-<div style="margin:0 0 16px; padding:12px 14px; border-radius:8px; background:#1a1d23; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+
+<div style="margin:0 0 12px; padding:12px 14px; border-radius:8px; background:#1a1d23; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
     <span style="font-size:14px;">Приём заказов покупателями:
         <strong style="color:{{ '#7fd18f' if orders_open else '#ffb4b4' }};">{{ 'ОТКРЫТ' if orders_open else 'ЗАКРЫТ' }}</strong>
     </span>
     <form method="post" action="/admin/orders" style="margin:0;">
         {% if orders_open %}
         <input type="hidden" name="action" value="close">
-        <button type="submit" style="padding:8px 14px; border:0; border-radius:6px; background:#7a2f2f; color:#fff; font-weight:600; cursor:pointer;">Закрыть приём</button>
+        <button type="submit" style="padding:8px 14px; border-radius:6px; background:#7a2f2f; font-size:14px;">Закрыть приём</button>
         {% else %}
         <input type="hidden" name="action" value="open">
-        <button type="submit" style="padding:8px 14px; border:0; border-radius:6px; background:#2f6f3e; color:#fff; font-weight:600; cursor:pointer;">Открыть приём</button>
+        <button type="submit" style="padding:8px 14px; border-radius:6px; background:#2f6f3e; font-size:14px;">Открыть приём</button>
         {% endif %}
     </form>
-    <span style="font-size:12px; opacity:.6;">Гасит только ЗАКУПКУ: у покупателей прячутся поля заказа закупки. Наличие (склад), каталог, суммы и «Моё» остаются. Твой ввод тут работает всегда.</span>
+    <span style="font-size:12px; opacity:.6;">Гасит только ЗАКУПКУ. Наличие, каталог, суммы и «Моё» остаются. Твой ввод тут работает всегда.</span>
 </div>
+
+<details style="margin:0 0 16px; padding:10px 14px; border-radius:8px; background:#1a1d23;">
+    <summary style="font-size:14px;">📄 Книга закупки {% if source_custom %}<span style="color:#7fd18f;">(своя ссылка)</span>{% else %}<span style="opacity:.6;">(из кода)</span>{% endif %}</summary>
+    {% if source_result == 'ok' %}<div class="result ok" style="margin:10px 0;">Книга закупки изменена ✓ — витрина уже читает новую.</div>
+    {% elif source_result == 'bad' %}<div class="result err" style="margin:10px 0;">⚠ Не похоже на ссылку Google Sheets. Скопируй адрес книги из браузера.</div>
+    {% elif source_result == 'reset' %}<div class="result ok" style="margin:10px 0;">Вернулись на ссылку из кода ✓</div>{% endif %}
+    <div style="font-size:12px; opacity:.6; margin:8px 0 4px;">Текущая:</div>
+    <div style="font-size:12px; word-break:break-all; opacity:.85;">{{ source_url }}</div>
+    <form method="post" action="/admin/source" style="margin-top:10px;">
+        <label>Новая ссылка на книгу закупки (весь адрес из браузера)</label>
+        <input type="url" name="url" placeholder="https://docs.google.com/spreadsheets/d/…/edit#gid=0">
+        <div class="buttons">
+            <button type="submit" class="add" name="action" value="set">Сменить закупку</button>
+            {% if source_custom %}<button type="submit" style="flex:0 0 auto; background:#3a4150;" name="action" value="reset">Вернуть из кода</button>{% endif %}
+        </div>
+        <div class="hint">Меняет источник ароматов и цен для витрины сразу, без правки кода и рестарта. Не забудь после старта нового круга открыть приём заказов.</div>
+    </form>
+</details>
 
 <h1>Внесение заказов (закупка)</h1>
 
@@ -62,63 +107,114 @@
     {% endif %}
 {% endif %}
 
-<form method="post" action="/admin/add" id="order-form">
-    <label>Покупатель (имя или телефон)</label>
-    <input type="text" name="phone" id="phone" list="user-list" autocomplete="off"
-           value="{{ last_phone or '' }}" placeholder="начни печатать имя или фамилию">
-    <datalist id="user-list">
-        {% for u in users_list %}<option value="{{ u.name }} — {{ u.phone }}"></option>{% endfor %}
-    </datalist>
+<div class="modesw">
+    <button type="button" id="mb-add" class="on add" onclick="setMode('add')">➕ Добавить</button>
+    <button type="button" id="mb-sub" class="sub" onclick="setMode('sub')">✂️ Убрать</button>
+</div>
 
-    <label>Аромат</label>
-    <input type="text" name="aroma" id="aroma" list="aroma-list" autocomplete="off"
-           placeholder="Начни печатать название">
-    <datalist id="aroma-list">
-        {% for a in aromas %}<option value="{{ a }}">{% endfor %}
-    </datalist>
+<!-- ================= ДОБАВИТЬ ================= -->
+<section id="mode-add">
+    <form method="post" action="/admin/add" id="order-form">
+        <label>Покупатель (имя или телефон)</label>
+        <input type="text" name="phone" id="phone" list="user-list" autocomplete="off"
+               value="{{ last_phone or '' }}" placeholder="начни печатать имя или фамилию">
+        <label>Аромат</label>
+        <input type="text" name="aroma" id="aroma" list="aroma-list" autocomplete="off"
+               placeholder="Начни печатать название">
+        <div class="current" id="current">Выбери телефон и аромат — покажу, сколько уже есть</div>
+        <label>Объём (мл)</label>
+        <input type="number" name="volume" id="volume" inputmode="numeric" placeholder="например 50">
+        <input type="hidden" name="direction" id="direction" value="плюс">
+        <div class="buttons">
+            <button type="submit" class="add">+ Добавить</button>
+        </div>
+    </form>
+</section>
 
-    <div class="current" id="current">Выбери телефон и аромат — покажу, сколько уже есть</div>
-
-    <label>Объём (мл)</label>
-    <input type="number" name="volume" id="volume" inputmode="numeric" placeholder="например 50">
-
-    <input type="hidden" name="direction" id="direction" value="плюс">
-
-    <div class="buttons">
-        <button type="submit" class="add" onclick="document.getElementById('direction').value='плюс'">+ Добавить</button>
-        <button type="submit" class="sub" onclick="document.getElementById('direction').value='минус'">− Убрать</button>
+<!-- ================= УБРАТЬ ================= -->
+<section id="mode-sub" hidden>
+    <div class="subsw">
+        <button type="button" id="sb-name" class="on" onclick="setSub('name')">По имени</button>
+        <button type="button" id="sb-aroma" onclick="setSub('aroma')">По аромату</button>
     </div>
-</form>
+
+    <!-- убрать: по имени -->
+    <div id="sub-name">
+        <label>Покупатель (имя или телефон)</label>
+        <div class="findbar">
+            <input type="text" id="find-name" list="user-list" autocomplete="off" placeholder="начни печатать имя">
+            <button type="button" onclick="loadByName()">Показать</button>
+        </div>
+        <div class="hint">Покажу все ароматы этой девочки — режь у нужного.</div>
+        <div class="rows" id="name-rows"></div>
+    </div>
+
+    <!-- убрать: по аромату -->
+    <div id="sub-aroma" hidden>
+        <label>Аромат</label>
+        <div class="findbar">
+            <input type="text" id="find-aroma" list="aroma-list" autocomplete="off" placeholder="начни печатать название">
+            <button type="button" onclick="loadByAroma()">Показать</button>
+        </div>
+        <div class="hint">Очередь по времени: свежие — внизу. Обычно режут снизу, но можно у любой.</div>
+        <div class="rows" id="aroma-rows"></div>
+    </div>
+
+    <div class="current" id="cut-status" style="display:none;"></div>
+</section>
+
+<datalist id="user-list">
+    {% for u in users_list %}<option value="{{ u.name }} — {{ u.phone }}"></option>{% endfor %}
+</datalist>
+<datalist id="aroma-list">
+    {% for a in aromas %}<option value="{{ a }}">{% endfor %}
+</datalist>
 
 <div class="log">
-    <h2>Последние внесённые</h2>
+    <h2>Последние действия</h2>
     <div id="log-items"></div>
 </div>
 
 <script>
-// Текущее количество: запрашиваем у сервера, когда выбраны телефон+аромат.
+// ---------- переключатели режимов ----------
+function setMode(m){
+    document.getElementById('mode-add').hidden = (m !== 'add');
+    document.getElementById('mode-sub').hidden = (m !== 'sub');
+    document.getElementById('mb-add').classList.toggle('on', m === 'add');
+    document.getElementById('mb-sub').classList.toggle('on', m === 'sub');
+}
+function setSub(s){
+    document.getElementById('sub-name').hidden = (s !== 'name');
+    document.getElementById('sub-aroma').hidden = (s !== 'aroma');
+    document.getElementById('sb-name').classList.toggle('on', s === 'name');
+    document.getElementById('sb-aroma').classList.toggle('on', s === 'aroma');
+}
+
+// ---------- добавить: текущее количество ----------
 async function refreshCurrent() {
     const phone = document.getElementById('phone').value.trim();
     const aroma = document.getElementById('aroma').value.trim();
     const box = document.getElementById('current');
-    if (!phone || !aroma) {
-        box.innerHTML = "Выбери телефон и аромат — покажу, сколько уже есть";
-        return;
-    }
+    if (!phone || !aroma) { box.innerHTML = "Выбери телефон и аромат — покажу, сколько уже есть"; return; }
     box.innerHTML = "…";
     try {
         const r = await fetch(`/admin/current?phone=${encodeURIComponent(phone)}&aroma=${encodeURIComponent(aroma)}`);
         const d = await r.json();
         box.innerHTML = `У <span class="hl">${phone}</span>: ${aroma} — <span class="hl">${d.buyer_qty} мл</span>. Всего набрано: <span class="hl">${d.collected} мл</span>`;
-    } catch(e) {
-        box.innerHTML = "Не удалось получить текущее количество";
-    }
+    } catch(e) { box.innerHTML = "Не удалось получить текущее количество"; }
 }
 document.getElementById('phone').addEventListener('change', refreshCurrent);
 document.getElementById('aroma').addEventListener('change', refreshCurrent);
 
-// Локальный лог последних внесённых (в памяти вкладки).
+// ---------- лог действий ----------
 const LOG_KEY = 'admin_last_orders';
+function pushLog(line){
+    let log = [];
+    try { log = JSON.parse(sessionStorage.getItem(LOG_KEY) || '[]'); } catch(e){}
+    log.unshift(line);
+    try { sessionStorage.setItem(LOG_KEY, JSON.stringify(log.slice(0,20))); } catch(e){}
+    renderLog();
+}
 function renderLog() {
     let log = [];
     try { log = JSON.parse(sessionStorage.getItem(LOG_KEY) || '[]'); } catch(e){}
@@ -126,21 +222,100 @@ function renderLog() {
     box.innerHTML = log.slice(0,7).map(x => `<div class="log-item">${x}</div>`).join('') || '<div class="log-item" style="opacity:0.5">пока пусто</div>';
 }
 {% if result and result.ok %}
-(function(){
-    let log = [];
-    try { log = JSON.parse(sessionStorage.getItem(LOG_KEY) || '[]'); } catch(e){}
-    log.unshift("{{ result.buyer }}: {{ result.aroma }} {{ result.direction }} {{ result.volume }} → {{ result.total }} мл");
-    sessionStorage.setItem(LOG_KEY, JSON.stringify(log.slice(0,20)));
-})();
+pushLog("{{ result.buyer }}: {{ result.aroma }} {{ result.direction }} {{ result.volume }} → {{ result.total }} мл");
 {% endif %}
 renderLog();
-
-// После успешной записи: телефон остаётся, аромат и объём чистим, фокус на аромат.
 {% if result and result.ok %}
     document.getElementById('aroma').value = '';
     document.getElementById('volume').value = '';
-    document.getElementById('aroma').focus();
 {% endif %}
+
+// ---------- убрать: рендер строк ----------
+function esc(s){ return (s+'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function cutTime(ts){ return ts ? ts.slice(5,16).replace('-', '.') : ''; }  // MM.DD HH:MM
+
+// kind='name' (строки — ароматы одной девочки) | 'aroma' (строки — покупатели одного аромата)
+function makeRow(kind, item, ctx){
+    const phone = kind === 'aroma' ? item.phone : ctx.phone;
+    const aroma = kind === 'aroma' ? ctx.aroma : item.aroma;
+    const name  = kind === 'aroma' ? item.name  : ctx.name;
+    const title = kind === 'aroma'
+        ? `<b>${esc(item.name)}</b> <span class="q">${item.ml} мл</span> <span class="t">${cutTime(item.ts)}</span>`
+        : `<b>${esc(item.aroma)}</b> <span class="q">${item.ml} мл</span>`;
+    const rw = document.createElement('div');
+    rw.className = 'rw';
+    rw.innerHTML =
+        `<div class="rw-main">${title}</div>
+         <div class="rw-cut">
+            <input type="number" inputmode="numeric" placeholder="мл" class="cv">
+            <button type="button" class="cut">Отрезать</button>
+            <button type="button" class="all">всё</button>
+         </div>`;
+    const inp = rw.querySelector('.cv');
+    const have = item.ml;
+    rw.querySelector('.cut').addEventListener('click', () => doCut(rw, phone, aroma, name, parseInt(inp.value||'0',10), have));
+    rw.querySelector('.all').addEventListener('click', () => doCut(rw, phone, aroma, name, have, have));
+    return rw;
+}
+
+async function doCut(rw, phone, aroma, name, vol, have){
+    const status = document.getElementById('cut-status');
+    if (!vol || vol <= 0){ status.style.display='block'; status.textContent='Впиши сколько мл отрезать (или «всё»).'; return; }
+    if (vol > have) vol = have;
+    const body = new URLSearchParams({phone, aroma, volume: String(vol), name: name || ''});
+    try {
+        const r = await fetch('/admin/cut', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body});
+        const d = await r.json();
+        if (d.ok){
+            const left = d.total;
+            pushLog(`✂ ${esc(name)}: ${esc(aroma)} −${vol} → ${left} мл`);
+            status.style.display='block';
+            status.innerHTML = `Отрезано ✓ <span class="hl">${esc(name)}</span> · ${esc(aroma)} −${vol} → осталось <span class="hl">${left} мл</span>`;
+            const q = rw.querySelector('.q');
+            if (q) q.textContent = left + ' мл';
+            if (left <= 0){ rw.classList.add('done'); rw.querySelector('.rw-cut').innerHTML = '<span style="opacity:.6;font-size:14px;">убрано полностью</span>'; }
+            else { rw.querySelector('.cv').value = ''; }
+        } else {
+            status.style.display='block'; status.textContent = '⚠ ' + (d.error || 'не вышло');
+        }
+    } catch(e){ status.style.display='block'; status.textContent = 'Связь прервалась, попробуй ещё раз'; }
+}
+
+async function loadByName(){
+    const box = document.getElementById('name-rows');
+    const raw = document.getElementById('find-name').value.trim();
+    if (!raw){ box.innerHTML=''; return; }
+    box.innerHTML = '<div class="hint">Загружаю…</div>';
+    try {
+        const r = await fetch('/admin/by_buyer?phone=' + encodeURIComponent(raw));
+        const d = await r.json();
+        if (!d.ok){ box.innerHTML = `<div class="hint">${esc(d.error||'не найдено')}</div>`; return; }
+        if (!d.aromas.length){ box.innerHTML = `<div class="hint">У «${esc(d.name)}» пока ничего нет.</div>`; return; }
+        box.innerHTML = `<div class="totline">${esc(d.name)} — позиций: ${d.aromas.length}</div>`;
+        const ctx = {phone: d.phone, name: d.name};
+        d.aromas.forEach(it => box.appendChild(makeRow('name', it, ctx)));
+    } catch(e){ box.innerHTML = '<div class="hint">Сбой запроса</div>'; }
+}
+
+async function loadByAroma(){
+    const box = document.getElementById('aroma-rows');
+    const raw = document.getElementById('find-aroma').value.trim();
+    if (!raw){ box.innerHTML=''; return; }
+    box.innerHTML = '<div class="hint">Загружаю…</div>';
+    try {
+        const r = await fetch('/admin/by_aroma?aroma=' + encodeURIComponent(raw));
+        const d = await r.json();
+        if (!d.ok){ box.innerHTML = `<div class="hint">${esc(d.error||'ошибка')}</div>`; return; }
+        if (!d.buyers.length){ box.innerHTML = `<div class="hint">Аромат «${esc(raw)}» пока никто не набрал.</div>`; return; }
+        box.innerHTML = `<div class="totline">${esc(d.aroma)} — набрано всего: ${d.total} мл · девочек: ${d.buyers.length}</div>`;
+        const ctx = {aroma: d.aroma};
+        d.buyers.forEach(it => box.appendChild(makeRow('aroma', it, ctx)));
+    } catch(e){ box.innerHTML = '<div class="hint">Сбой запроса</div>'; }
+}
+
+// Enter в поле поиска = «Показать»
+document.getElementById('find-name').addEventListener('keydown', e => { if (e.key==='Enter'){ e.preventDefault(); loadByName(); }});
+document.getElementById('find-aroma').addEventListener('keydown', e => { if (e.key==='Enter'){ e.preventDefault(); loadByAroma(); }});
 </script>
 
 </body>

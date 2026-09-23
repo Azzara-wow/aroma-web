@@ -282,7 +282,7 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
 
   <ul class="list" id="list">
   {% for aroma in aromas %}
-    {% set plan = aroma.collected + aroma.remaining %}
+    {% set plan = aroma.goal %}
     {% set raw = (aroma.collected * 100 // plan) if plan > 0 else 0 %}
     {% set pct = raw if raw < 100 else 100 %}
     <li class="item" data-source="zakupka"
@@ -338,6 +338,14 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
           <button class="addbtn" onclick="event.stopPropagation(); scrollToPreview()">В заказ</button>
         </div>
         <div class="hint">Уменьшить объём можно через организатора — напишите в чат.</div>
+        {% endif %}
+
+        {% if is_admin %}
+        <div class="who" data-aroma="{{ aroma.aroma_name }}" data-loaded="0" onclick="event.stopPropagation()"
+             style="margin-top:12px; padding:10px 12px; background:rgba(0,0,0,.05); border:1px solid rgba(0,0,0,.08); border-radius:8px;">
+          <div style="font-size:13px; font-weight:700; opacity:.7; margin-bottom:6px;">👁 Кто набрал — только тебе</div>
+          <div class="who-list" style="font-size:14px;"><span style="opacity:.5;">раскрываю…</span></div>
+        </div>
         {% endif %}
       </div>
     </li>
@@ -522,6 +530,23 @@ let curMode = "category";
 function toggleItem(head){
   const li = head.closest(".item");
   li.dataset.open = li.dataset.open === "1" ? "0" : "1";
+  if (li.dataset.open === "1") loadWho(li);   // организаторский список «кто набрал» — лениво
+}
+function whoEsc(s){ return (s+'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+async function loadWho(li){
+  const box = li.querySelector('.who');
+  if (!box || box.dataset.loaded === '1') return;   // только для организатора и один раз
+  box.dataset.loaded = '1';
+  const list = box.querySelector('.who-list');
+  try {
+    const r = await fetch('/admin/by_aroma?aroma=' + encodeURIComponent(box.dataset.aroma));
+    const d = await r.json();
+    if (!d.ok){ list.innerHTML = '<span style="opacity:.5;">не удалось загрузить</span>'; box.dataset.loaded='0'; return; }
+    if (!d.buyers.length){ list.innerHTML = '<span style="opacity:.5;">пока никто не набрал</span>'; return; }
+    const rows = d.buyers.map(b =>
+      `<div style="display:flex; justify-content:space-between; gap:12px; padding:3px 0; border-bottom:1px solid rgba(0,0,0,.07);"><span>${whoEsc(b.name)}</span><b>${b.ml} мл</b></div>`).join('');
+    list.innerHTML = rows + `<div style="display:flex; justify-content:space-between; gap:12px; padding:5px 0 0; font-weight:700;"><span>Всего</span><b>${d.total} мл</b></div>`;
+  } catch(e){ list.innerHTML = '<span style="opacity:.5;">сбой запроса</span>'; box.dataset.loaded='0'; }
 }
 function showToast(text){
   const t = document.getElementById("toast");
