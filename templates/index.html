@@ -469,8 +469,8 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
       <input name="last_name" value="{{ deliv.last_name }}" autocomplete="family-name" required>
       <label>Имя</label>
       <input name="first_name" value="{{ deliv.first_name }}" autocomplete="given-name" required>
-      <label>Отчество</label>
-      <input name="patronymic" value="{{ deliv.patronymic }}" required>
+      <label>Отчество <span style="color:var(--ink-soft);font-weight:400">— если есть</span></label>
+      <input name="patronymic" value="{{ deliv.patronymic }}">
 
       <label>Город доставки</label>
       <div class="dc-row">

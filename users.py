@@ -177,8 +177,8 @@ def _row_to_user(row, idx: int) -> dict:
         "email": c(COL_EMAIL),
         "pay_link": c(COL_PAY_LINK),
         "pay_amount": c(COL_PAY_AMOUNT),
-        # заполнено, если есть Фамилия+Имя+Отчество и выбран ПВЗ
-        "delivery_complete": bool(last and first and patr and pvz_id),
+        # заполнено, если есть Фамилия+Имя и выбран ПВЗ (отчество API не требует)
+        "delivery_complete": bool(last and first and pvz_id),
     }
 
 
