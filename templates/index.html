@@ -234,6 +234,11 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
 
   {% if is_admin %}<a class="admin-door" href="/admin">🔑 Организаторская</a>{% endif %}
   {% if not is_auth %}<a class="login-cta" href="/login">Чтобы заказать и видеть «Моё» — войдите</a>{% endif %}
+  {% if not orders_open %}
+  <div style="margin:0 0 12px; padding:11px 14px; background:#f6efe3; border:1px solid #e7c3b6; border-radius:10px; color:#9a5643; font-size:13.5px; text-align:center; line-height:1.45;">
+    Закупка завершена — приём заказов по закупке закрыт. Наличие (склад) заказать можно; цены и «Моё» доступны.
+  </div>
+  {% endif %}
   {% if is_auth and not delivery_complete %}
     <button class="deliv-cta" type="button" onclick="gotoDelivery()">📦 Заполните данные для отправки — ФИО и ПВЗ Яндекс</button>
   {% endif %}
@@ -324,7 +329,7 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
           <div class="desc">{{ aroma.view }}</div>
         {% endif %}
 
-        {% if is_auth %}
+        {% if is_auth and orders_open %}
         <div class="addrow">
           <input type="text" inputmode="numeric" pattern="[0-9]*"
                  class="amount-input" data-source="zakupka" data-name="{{ aroma.aroma_name }}"

@@ -24,6 +24,7 @@ import nalichie
 import catalog
 import notify
 import info
+import orders_state
 
 app = FastAPI()
 app.include_router(admin.router)
@@ -145,6 +146,7 @@ def index(request: Request):
                 "has_catalog": bool(catalog_items),
                 "has_info": bool(info_items),
                 "is_admin": users.is_admin(user) if is_auth else False,
+                "orders_open": orders_state.is_open(),   # приём заказов открыт/закрыт
                 # данные доставки: плашка горит, пока не заполнено (гостю не показываем)
                 "delivery_complete": (user.get("delivery_complete", False) if is_auth else True),
                 "deliv": {
@@ -281,9 +283,11 @@ def order(request: Request, payload: OrderIn):
     user = auth.current_user(request)
     if not user:
         return JSONResponse({"ok": False, "reason": "not_authenticated"}, status_code=401)
+    # Закрытие гасит ТОЛЬКО закупку; Наличие (склад) заказывается всегда.
+    zak_items = payload.zakupka if orders_state.is_open() else {}
     try:
-        res_z = flow.add_batch(user["phone"], user["name"], payload.zakupka) \
-            if payload.zakupka else {"ok": True, "changes": []}
+        res_z = flow.add_batch(user["phone"], user["name"], zak_items) \
+            if zak_items else {"ok": True, "changes": []}
         res_n = nalichie.add_batch(user["phone"], user["name"], payload.nalichie) \
             if payload.nalichie else {"ok": True, "changes": [], "rejected": []}
     except Exception:

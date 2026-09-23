@@ -21,6 +21,7 @@ import auth
 import nalichie
 import catalog
 import notify
+import orders_state
 
 
 # ---------- покупатель по имени (не по телефону) ----------
@@ -171,8 +172,18 @@ def admin_page(request: Request):
             "request": request,
             "aromas": _live_aromas(),
             "users_list": _buyer_options(),
+            "orders_open": orders_state.is_open(),
         },
     )
+
+
+@router.post("/admin/orders")
+def admin_orders_toggle(request: Request, action: str = Form(...)):
+    """Открыть/закрыть приём заказов покупателями (action=open|close)."""
+    if not _require_admin(request):
+        return RedirectResponse("/login", status_code=303)
+    orders_state.set_open(action == "open")
+    return RedirectResponse("/admin", status_code=303)
 
 
 @router.get("/admin/buyers", response_class=HTMLResponse)

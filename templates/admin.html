@@ -33,6 +33,22 @@
     <a href="/admin/nalichie" style="flex:1; text-align:center; padding:10px; border-radius:8px; text-decoration:none; background:#1a1d23; color:#8ab4f7;">Наличие</a>
     <a href="/admin/invoices" style="flex:1; text-align:center; padding:10px; border-radius:8px; text-decoration:none; background:#1a1d23; color:#8ab4f7;">Счета</a>
 </div>
+<div style="margin:0 0 16px; padding:12px 14px; border-radius:8px; background:#1a1d23; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+    <span style="font-size:14px;">Приём заказов покупателями:
+        <strong style="color:{{ '#7fd18f' if orders_open else '#ffb4b4' }};">{{ 'ОТКРЫТ' if orders_open else 'ЗАКРЫТ' }}</strong>
+    </span>
+    <form method="post" action="/admin/orders" style="margin:0;">
+        {% if orders_open %}
+        <input type="hidden" name="action" value="close">
+        <button type="submit" style="padding:8px 14px; border:0; border-radius:6px; background:#7a2f2f; color:#fff; font-weight:600; cursor:pointer;">Закрыть приём</button>
+        {% else %}
+        <input type="hidden" name="action" value="open">
+        <button type="submit" style="padding:8px 14px; border:0; border-radius:6px; background:#2f6f3e; color:#fff; font-weight:600; cursor:pointer;">Открыть приём</button>
+        {% endif %}
+    </form>
+    <span style="font-size:12px; opacity:.6;">Гасит только ЗАКУПКУ: у покупателей прячутся поля заказа закупки. Наличие (склад), каталог, суммы и «Моё» остаются. Твой ввод тут работает всегда.</span>
+</div>
+
 <h1>Внесение заказов (закупка)</h1>
 
 {% if result %}
