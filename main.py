@@ -163,6 +163,7 @@ def index(request: Request):
                     "pvz_id": user.get("pvz_id", ""),
                     "tracking_url": user.get("tracking_url", ""),
                     "carrier": user.get("carrier", "yandex"),
+                    "carrier_manual": user.get("carrier_manual", ""),
                     "email": user.get("email", ""),
                     "pay_link": user.get("pay_link", ""),
                     "pay_amount": user.get("pay_amount", ""),

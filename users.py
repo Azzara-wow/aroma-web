@@ -57,6 +57,18 @@ COL_PAY_AMOUNT = 17 # R — сумма к оплате = закупка + дос
 COL_PAY_DELIVERY = 18  # S — доставка в счёте, ₽ (Яндекс за наш счёт → строкой в счёт)
 COL_PAID = 19       # T — «оплачено» (организатор отметил оплату в дашборде)
 
+# Перевозчики, которых покупатель выбирает сам. Любое другое значение в колонке O
+# («Почта России», «Озон», «Wildberries»…) вписывает ТОЛЬКО организатор — это ручная
+# доставка по договорённости: вместо ПВЗ покупатель пишет свободный адрес (в колонку L).
+SELF_CARRIERS = ("yandex", "cdek")
+
+
+def manual_carrier(raw):
+    """Название ручного перевозчика (как вписала организатор) или '' для Яндекса/СДЭКа."""
+    v = (raw or "").strip()
+    return "" if v.lower() in ("",) + SELF_CARRIERS else v
+
+
 HEADER = ["телефон", "имя", "код-хеш", "адрес", "роль", "создан", "заметка"]
 
 ROLE_BUYER = "покупатель"
@@ -158,6 +170,7 @@ def _row_to_user(row, idx: int) -> dict:
         return core.norm(row[i]) if i < len(row) else ""
     last, first, patr = c(COL_LAST), c(COL_FIRST), c(COL_PATR)
     pvz_id = c(COL_PVZ_ID)
+    manual = manual_carrier(c(COL_CARRIER))
     return {
         "row": idx,                       # 0-индекс в values (для точечной правки)
         "phone": normalize_phone(c(COL_PHONE)),
@@ -175,14 +188,16 @@ def _row_to_user(row, idx: int) -> dict:
         "pvz_address": c(COL_PVZ_ADDR),
         "pvz_id": pvz_id,
         "tracking_url": c(COL_TRACKING),
-        "carrier": c(COL_CARRIER) or "yandex",
+        "carrier": "manual" if manual else (c(COL_CARRIER).lower() or "yandex"),
+        "carrier_manual": manual,        # «Почта России» и т.п. — вписывает организатор
         "email": c(COL_EMAIL),
         "pay_link": c(COL_PAY_LINK),
         "pay_amount": c(COL_PAY_AMOUNT),
         "pay_delivery": c(COL_PAY_DELIVERY),
         "paid": c(COL_PAID).lower().startswith("оплач"),
         # заполнено, если есть Фамилия+Имя и выбран ПВЗ (отчество API не требует)
-        "delivery_complete": bool(last and first and pvz_id),
+        # (ручная доставка: вместо ПВЗ — свободный адрес в колонке L)
+        "delivery_complete": bool(last and first and (c(COL_PVZ_ADDR) if manual else pvz_id)),
     }
 
 
@@ -371,6 +386,20 @@ def set_delivery(phone_raw, last_name="", first_name="", patronymic="",
     idx = _find_row(values, canon)
     if idx is None:
         return {"ok": False, "reason": "not_found"}
+    # Ручного перевозчика ставит только организатор: покупатель его не выберет и не
+    # затрёт. У ручной доставки ПВЗ-id нет (адрес свободный) — чистим, чтобы старый
+    # ПВЗ Яндекса/СДЭКа не ушёл в автоматическую отправку.
+    # читаем ячейку перевозчика ЗАНОВО, мимо 30-секундного кэша: организатор могла
+    # только что вписать «Почта России», и старый кэш не должен её затереть
+    try:
+        current = ws.cell(idx + 1, COL_CARRIER + 1).value or ""
+    except Exception:
+        row = values[idx]
+        current = row[COL_CARRIER] if COL_CARRIER < len(row) else ""
+    if manual_carrier(current):
+        carrier, pvz_id = "", ""
+    elif (carrier or "").strip().lower() not in SELF_CARRIERS:
+        carrier = "yandex"
     rng = f"{sheets.col_a1(COL_LAST)}{idx + 1}:{sheets.col_a1(COL_PVZ_ID)}{idx + 1}"
     ws.update(range_name=rng, values=[[
         (last_name or "").strip(), (first_name or "").strip(), (patronymic or "").strip(),
