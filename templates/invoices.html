@@ -54,12 +54,15 @@
 
     <h2>Сводная: кто сколько платит</h2>
     <table>
-        <tr><th>Покупатель</th><th>Телефон</th><th class="num">Сумма, ₽</th></tr>
+        <tr><th>Покупатель</th><th>Телефон</th><th class="num">Заказ, ₽</th><th class="num">Доставка, ₽</th><th class="num">Итого, ₽</th><th></th></tr>
         {% for s in data.summary %}
-        <tr><td>{{ s.buyer }}</td><td class="ph">{{ s.phone }}</td><td class="num">{{ s.total }}</td></tr>
+        <tr><td>{{ s.buyer }}</td><td class="ph">{{ s.phone }}</td><td class="num">{{ s.total }}</td>
+            <td class="num">{{ s.delivery if s.delivery else '—' }}</td><td class="num">{{ s.grand }}</td>
+            <td>{% if s.paid %}<span style="color:#7fd08a;">✓ оплачено</span>{% endif %}</td></tr>
         {% endfor %}
     </table>
     <div class="grand">Итого по закупке: {{ data.grand_total }} ₽</div>
+    <div class="muted" style="font-size:12px; margin-top:4px;">Доставка и «оплачено» приходят из дашборда, когда он выставляет счета.</div>
 
     <h2>Детальные счета</h2>
     <input type="text" id="filter" placeholder="Фильтр по фамилии — начни печатать">
@@ -83,7 +86,10 @@
                 <div class="muted">⚠ {{ p.aroma }} {{ p.volume }} мл — {{ p.reason }} (не в сумме)</div>
                 {% endfor %}
             {% endif %}
-            <div class="buyer-total">Итого: {{ d.total }} ₽</div>
+            {% if d.delivery %}
+            <div class="buyer-total" style="font-weight:400; color:#fff;">Заказ: {{ d.total }} ₽ · Доставка: {{ d.delivery }} ₽</div>
+            {% endif %}
+            <div class="buyer-total">Итого: {{ d.grand }} ₽{% if d.paid %} <span style="color:#7fd08a;">✓ оплачено</span>{% endif %}</div>
         </div>
         {% endfor %}
     </div>

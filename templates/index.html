@@ -225,6 +225,14 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
 .mine-sum b{color:var(--green); font-size:16px}
 .mine-sum .ms-nal{color:var(--ink-soft)}
 .mine-sum .ms-note{margin-top:5px; font-size:11.5px; color:var(--ink-soft); line-height:1.5}
+.mine-sum .ms-title{font-weight:700; margin-bottom:6px}
+.mine-sum .ms-line{display:flex; justify-content:space-between; gap:10px; padding:3px 0}
+.mine-sum .ms-total{border-top:1px solid var(--line); margin-top:4px; padding-top:7px}
+.mine-sum .ms-nal{display:block; margin-top:5px; font-size:12.5px}
+.mine-sum .ms-pay{display:block; margin-top:10px; padding:11px; text-align:center; border-radius:3px;
+  background:var(--green); color:#fbf6ec; text-decoration:none; font-weight:700}
+.paid-ok{margin:12px 18px 0; padding:12px; text-align:center; border-radius:3px; font-size:14px; font-weight:700;
+  background:rgba(44,79,44,.09); border:1px solid rgba(44,79,44,.25); color:var(--green)}
 </style>
 </head>
 <body>
@@ -251,7 +259,9 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
   {% if is_auth and not delivery_complete %}
     <button class="deliv-cta" type="button" onclick="gotoDelivery()">📦 Заполните данные для отправки — ФИО и ПВЗ Яндекс</button>
   {% endif %}
-  {% if is_auth and deliv.pay_link %}
+  {% if is_auth and deliv.paid %}
+    <div class="paid-ok">✓ Заказ оплачен. Спасибо!</div>
+  {% elif is_auth and deliv.pay_link %}
     <a class="pay-cta" href="{{ deliv.pay_link }}" target="_blank" rel="noopener">💳 К оплате{% if deliv.pay_amount %}: {{ deliv.pay_amount }} ₽{% endif %} — оплатить заказ</a>
   {% endif %}
 
@@ -283,9 +293,22 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
 
   {% if is_auth %}
   <div id="mine-sum" class="mine-sum" hidden>
-    💰 Ваш заказ по закупке: <b>{{ zakupka_mine_sum }} ₽</b>
-    {% if nal_mine_sum %}<span class="ms-nal"> · наличие: {{ nal_mine_sum }} ₽</span>{% endif %}
-    <div class="ms-note">Сумма пересчитывается по мере заказа. К оплате — когда организатор пришлёт ссылку.</div>
+    {% if deliv.pay_amount %}
+      {% set bill_total = deliv.pay_amount|int %}
+      {% set bill_deliv = (deliv.pay_delivery or 0)|int %}
+      <div class="ms-title">🧾 Счёт по закупке</div>
+      <div class="ms-line"><span>Заказ</span><span>{{ bill_total - bill_deliv }} ₽</span></div>
+      {% if bill_deliv %}<div class="ms-line"><span>Доставка {{ 'СДЭК' if deliv.carrier == 'cdek' else 'Яндекс' }}</span><span>{{ bill_deliv }} ₽</span></div>{% endif %}
+      <div class="ms-line ms-total"><span>{{ 'Оплачено' if deliv.paid else 'Итого к оплате' }}</span><b>{{ bill_total }} ₽{% if deliv.paid %} ✓{% endif %}</b></div>
+      {% if nal_mine_sum %}<div class="ms-nal">Наличие считается отдельно: {{ nal_mine_sum }} ₽</div>{% endif %}
+      {% if deliv.pay_link and not deliv.paid %}
+        <a class="ms-pay" href="{{ deliv.pay_link }}" target="_blank" rel="noopener">💳 Оплатить {{ bill_total }} ₽</a>
+      {% endif %}
+    {% else %}
+      💰 Ваш заказ по закупке: <b>{{ zakupka_mine_sum }} ₽</b>
+      {% if nal_mine_sum %}<span class="ms-nal"> · наличие: {{ nal_mine_sum }} ₽</span>{% endif %}
+      <div class="ms-note">Сумма пересчитывается по мере заказа. К оплате — когда организатор пришлёт счёт: заказ и доставка отдельными строками.</div>
+    {% endif %}
   </div>
   {% endif %}
 

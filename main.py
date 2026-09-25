@@ -25,10 +25,12 @@ import catalog
 import notify
 import info
 import orders_state
+import sync_api
 
 app = FastAPI()
 app.include_router(admin.router)
 app.include_router(auth.router)
+app.include_router(sync_api.router)
 app.mount("/static", StaticFiles(directory="static"), name="static")  # логотип и пр.
 templates = Jinja2Templates(directory="templates")
 
@@ -164,6 +166,8 @@ def index(request: Request):
                     "email": user.get("email", ""),
                     "pay_link": user.get("pay_link", ""),
                     "pay_amount": user.get("pay_amount", ""),
+                    "pay_delivery": user.get("pay_delivery", ""),
+                    "paid": user.get("paid", False),
                 } if is_auth else {},
             },
         )
@@ -206,11 +210,18 @@ def cities_search(request: Request, q: str = "", carrier: str = "yandex"):
         return JSONResponse({"ok": False, "error": str(e)})
 
 
-def _delivery_paid_by():
+def _delivery_paid_by(carrier="yandex"):
     """'recipient' если доставку оплачивает покупатель (наложенный платёж), иначе 'seller'.
-    Читается из окружения/.env (DELIVERY_PAID_BY), общий флаг витрины и дашборда."""
+    Флаг перевозчика DELIVERY_PAID_BY_YANDEX / _CDEK, иначе общий DELIVERY_PAID_BY (как в
+    дашборде). Яндекс по умолчанию — за наш счёт: доставка идёт строкой в счёт покупателя."""
     from yandex_delivery import config as ycfg
     ycfg._load_dotenv()
+    c = "cdek" if carrier == "cdek" else "yandex"
+    own = os.environ.get("DELIVERY_PAID_BY_" + c.upper(), "").strip().lower()
+    if own:
+        return own
+    if c == "yandex":
+        return "seller"
     return os.environ.get("DELIVERY_PAID_BY", "seller").lower()
 
 
@@ -219,7 +230,7 @@ def pvz_search(request: Request, carrier: str = "yandex", city_code: int = 0, ci
     """JSON-поиск ПВЗ выбранного перевозчика по коду города → [{id, name, address}].
     id = platform_id (Яндекс) или code ПВЗ (СДЭК). Если доставку платит покупатель —
     показываем только ПВЗ с наложенным платежом."""
-    cod = _delivery_paid_by() == "recipient"
+    cod = _delivery_paid_by(carrier) == "recipient"
     try:
         if carrier == "cdek":
             c = CdekClient()

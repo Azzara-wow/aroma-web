@@ -111,9 +111,12 @@ def build_invoices():
     # Актуальные имена из Пользователей (динамически): имя в Потоке — «снимок» на
     # момент заказа, а тут берём текущее по телефону. Fallback — снимок, потом телефон.
     try:
-        current_names = {u["phone"]: u["name"] for u in users.list_users() if u["name"]}
+        user_rows = users.list_users()
     except Exception:
-        current_names = {}
+        user_rows = []
+    current_names = {u["phone"]: u["name"] for u in user_rows if u["name"]}
+    # доставка и оплата — из счёта, который выставил дашборд (лист «Покупатели», S/T)
+    bill = {u["phone"]: u for u in user_rows}
 
     details = []
     export_rows = []
@@ -145,11 +148,16 @@ def build_invoices():
             d["total"] += calc["amount"]
             export_rows.append([f"{phone} - {buyer}", meta["name"], int(vol), calc["per_ml"], calc["amount"]])
 
+        b = bill.get(phone) or {}
+        d["delivery"] = int(core.to_num(b.get("pay_delivery", "")) or 0)
+        d["paid"] = bool(b.get("paid"))
+        d["grand"] = d["total"] + d["delivery"]
         if d["positions"] or d["problems"]:
             details.append(d)
 
     details.sort(key=lambda d: d["buyer"].lower())
-    summary = [{"buyer": d["buyer"], "phone": d["phone"], "total": d["total"]} for d in details]
+    summary = [{"buyer": d["buyer"], "phone": d["phone"], "total": d["total"],
+                "delivery": d["delivery"], "grand": d["grand"], "paid": d["paid"]} for d in details]
     grand_total = sum(d["total"] for d in details)
 
     return {

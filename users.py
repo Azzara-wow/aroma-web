@@ -53,7 +53,9 @@ COL_TRACKING = 13   # N — ссылка отслеживания (пишет д
 COL_CARRIER = 14    # O — перевозчик выбранного ПВЗ: yandex | cdek
 COL_EMAIL = 15      # P — e-mail получателя (заполняет покупатель на витрине)
 COL_PAY_LINK = 16   # Q — ссылка на оплату (вносит организатор; покупатель видит «Оплатить»)
-COL_PAY_AMOUNT = 17 # R — сумма к оплате (пишет дашборд при загрузке ссылок)
+COL_PAY_AMOUNT = 17 # R — сумма к оплате = закупка + доставка (пишет дашборд)
+COL_PAY_DELIVERY = 18  # S — доставка в счёте, ₽ (Яндекс за наш счёт → строкой в счёт)
+COL_PAID = 19       # T — «оплачено» (организатор отметил оплату в дашборде)
 
 HEADER = ["телефон", "имя", "код-хеш", "адрес", "роль", "создан", "заметка"]
 
@@ -177,6 +179,8 @@ def _row_to_user(row, idx: int) -> dict:
         "email": c(COL_EMAIL),
         "pay_link": c(COL_PAY_LINK),
         "pay_amount": c(COL_PAY_AMOUNT),
+        "pay_delivery": c(COL_PAY_DELIVERY),
+        "paid": c(COL_PAID).lower().startswith("оплач"),
         # заполнено, если есть Фамилия+Имя и выбран ПВЗ (отчество API не требует)
         "delivery_complete": bool(last and first and pvz_id),
     }
@@ -207,7 +211,11 @@ def list_users():
         if not valid_phone(phone):
             continue
         name = core.norm(row[COL_NAME]) if COL_NAME < len(row) else ""
-        out.append({"phone": phone, "name": name})
+        cell = lambda i: core.norm(row[i]) if i < len(row) else ""
+        out.append({"phone": phone, "name": name,
+                    # счёт из дашборда — для строки доставки на странице счетов
+                    "pay_delivery": cell(COL_PAY_DELIVERY),
+                    "paid": cell(COL_PAID).lower().startswith("оплач")})
     return out
 
 
