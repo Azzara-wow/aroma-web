@@ -169,6 +169,7 @@ def index(request: Request):
                     "pay_amount": user.get("pay_amount", ""),
                     "pay_delivery": user.get("pay_delivery", ""),
                     "paid": user.get("paid", False),
+                    "pay_to": user.get("pay_to", ""),
                 } if is_auth else {},
             },
         )

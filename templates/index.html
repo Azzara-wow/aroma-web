@@ -234,6 +234,11 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
 .mine-sum .ms-nal{display:block; margin-top:5px; font-size:12.5px}
 .mine-sum .ms-pay{display:block; margin-top:10px; padding:11px; text-align:center; border-radius:3px;
   background:var(--green); color:#fbf6ec; text-decoration:none; font-weight:700}
+.pay-transfer{animation:none; cursor:default}
+.mine-sum .ms-transfer{margin-top:10px; padding:11px 12px; border-radius:6px; background:var(--cream); border:1px solid var(--line)}
+.mine-sum .ms-payto{font-weight:700; font-size:16px; margin:4px 0 8px; color:var(--green); word-break:break-word}
+.mine-sum .ms-copy{width:100%; padding:10px; border:0; border-radius:3px; background:var(--green); color:#fbf6ec;
+  font-family:var(--sans); font-weight:700; font-size:14px; cursor:pointer}
 .paid-ok{margin:12px 18px 0; padding:12px; text-align:center; border-radius:3px; font-size:14px; font-weight:700;
   background:rgba(44,79,44,.09); border:1px solid rgba(44,79,44,.25); color:var(--green)}
 </style>
@@ -266,6 +271,8 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
     <div class="paid-ok">✓ Заказ оплачен. Спасибо!</div>
   {% elif is_auth and deliv.pay_link %}
     <a class="pay-cta" href="{{ deliv.pay_link }}" target="_blank" rel="noopener">💳 К оплате{% if deliv.pay_amount %}: {{ deliv.pay_amount }} ₽{% endif %} — оплатить заказ</a>
+  {% elif is_auth and deliv.pay_to and deliv.pay_amount %}
+    <div class="pay-cta pay-transfer">💳 К оплате: {{ deliv.pay_amount }} ₽ — перевод на {{ deliv.pay_to }}</div>
   {% endif %}
 
   <div class="hero">
@@ -306,6 +313,12 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
       {% if nal_mine_sum %}<div class="ms-nal">Наличие считается отдельно: {{ nal_mine_sum }} ₽</div>{% endif %}
       {% if deliv.pay_link and not deliv.paid %}
         <a class="ms-pay" href="{{ deliv.pay_link }}" target="_blank" rel="noopener">💳 Оплатить {{ bill_total }} ₽</a>
+      {% elif deliv.pay_to and not deliv.paid %}
+        <div class="ms-transfer">
+          <div>Оплата переводом <b>{{ bill_total }} ₽</b> на:</div>
+          <div class="ms-payto">{{ deliv.pay_to }}</div>
+          <button type="button" class="ms-copy" onclick="copyPayTo(this, {{ deliv.pay_to|tojson }})">📋 Скопировать номер</button>
+        </div>
       {% endif %}
     {% else %}
       💰 Ваш заказ по закупке: <b>{{ zakupka_mine_sum }} ₽</b>
@@ -667,6 +680,14 @@ async function saveEmail(){
   }finally{
     if(btn){ btn.disabled = false; }
   }
+}
+// Реквизиты перевода: копируем номер телефона/карты (без слова «Яндекс» и пр.)
+function copyPayTo(btn, text){
+  const m = String(text).match(/[+\d][\d\s()-]{8,}\d/);
+  const val = m ? m[0].replace(/[\s()-]/g, "") : String(text);
+  const done = function(){ const old = btn.textContent; btn.textContent = "Скопировано ✓"; setTimeout(function(){ btn.textContent = old; }, 1600); };
+  if (navigator.clipboard) navigator.clipboard.writeText(val).then(done, function(){ prompt("Скопируйте:", val); });
+  else prompt("Скопируйте:", val);
 }
 function validDeliv(){
   const manual = document.getElementById("dv-manual-addr");
