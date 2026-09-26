@@ -23,6 +23,9 @@ import catalog
 import notify
 import orders_state
 import source_state
+import sheets
+import info
+import traceback
 
 
 # ---------- покупатель по имени (не по телефону) ----------
@@ -86,7 +89,7 @@ def _live_aromas():
 
 # ---------- сборка счетов из Потока ----------
 
-def build_invoices():
+def build_invoices(url=None):
     """
     Счёт по каждому покупателю: остатки из Потока × цены из Ассортимента.
     Контракт вывода не меняется (invoices.html): summary / grand_total /
@@ -94,7 +97,7 @@ def build_invoices():
       - позиция без валидной цены в грейде -> проблемная (в сумму не идёт);
       - аромат, которого нет в Ассортименте (или скрыт) -> тоже проблемная.
     """
-    rows, _ = core.prepare_dataframe(core.load_data())
+    rows, _ = core.prepare_dataframe(core.load_data(url))
     info = {}
     for x in rows:
         if x["status"] in ("hide", "сервис"):
@@ -106,7 +109,7 @@ def build_invoices():
             "price": x["price"],   # цена за штуку — для штучных категорий (База)
         }
 
-    orders = flow.net_orders()  # phone -> {"name", "aromas": {аромат: мл}}
+    orders = flow.net_orders(url)  # phone -> {"name", "aromas": {аромат: мл}}
 
     # Актуальные имена из Пользователей (динамически): имя в Потоке — «снимок» на
     # момент заказа, а тут берём текущее по телефону. Fallback — снимок, потом телефон.
@@ -183,7 +186,16 @@ def _admin_ctx(request, **extra):
         "source_url": core.current_source_url(),
         "source_custom": source_state.is_custom(),
         "source_result": request.query_params.get("src"),
+        "arch_result": request.query_params.get("arch"),
     }
+    try:
+        import archive
+        ctx["archive_list"] = archive.entries()
+        ctx["current_archived"] = archive.current_is_archived()
+        ctx["book_title"] = archive.book_title()
+    except Exception:
+        traceback.print_exc()
+        ctx.update(archive_list=[], current_archived=False, book_title="")
     ctx.update(extra)
     return ctx
 
@@ -217,6 +229,8 @@ def admin_source(request: Request, url: str = Form(""), action: str = Form("set"
     ok = source_state.set_url(url)
     if ok:
         core.reset_data_cache()
+        sheets.vdrop("flow")           # Поток и «Информация» — уже из новой книги
+        info._cache["items"] = None
     return RedirectResponse(f"/admin?src={'ok' if ok else 'bad'}", status_code=303)
 
 
@@ -226,6 +240,69 @@ def _current_names():
         return {u["phone"]: u["name"] for u in users.list_users() if u["name"]}
     except Exception:
         return {}
+
+
+# ---------- архив закупок ----------
+
+def _arch_back(code, text=""):
+    from urllib.parse import quote
+    return RedirectResponse(f"/admin?arch={code}{'&t=' + quote(text) if text else ''}#archive", status_code=303)
+
+
+@router.post("/admin/archive/current")
+def admin_archive_current(request: Request, name: str = Form("")):
+    """«Перевести в архив» текущую закупку (только когда приём закрыт)."""
+    import archive
+    if not _require_admin(request):
+        return RedirectResponse("/login", status_code=303)
+    if orders_state.is_open():
+        return _arch_back("err", "Сначала закрой приём заказов.")
+    if archive.current_is_archived():
+        return _arch_back("err", "Эта книга уже в архиве.")
+    try:
+        archive.archive_current(name)
+    except Exception as e:
+        traceback.print_exc()
+        return _arch_back("err", f"Не удалось прочитать книгу: {e}")
+    return _arch_back("ok", "Закупка в архиве. Витрина показывает «следующая скоро».")
+
+
+@router.post("/admin/archive/add")
+def admin_archive_add(request: Request, name: str = Form(""), url: str = Form("")):
+    """Положить в архив ПРОШЛУЮ закупку по ссылке на её книгу."""
+    import archive
+    if not _require_admin(request):
+        return RedirectResponse("/login", status_code=303)
+    if not source_state.valid_url(url):
+        return _arch_back("err", "Не похоже на ссылку Google Sheets.")
+    try:
+        archive.add(name, url.strip())
+    except Exception as e:
+        traceback.print_exc()
+        return _arch_back("err", f"Не удалось прочитать книгу: {e}")
+    return _arch_back("ok", "Закупка добавлена в архив.")
+
+
+@router.post("/admin/archive/{entry_id}")
+def admin_archive_edit(request: Request, entry_id: int, action: str = Form(...), name: str = Form("")):
+    """Переименовать / переснять из книги / убрать из архива."""
+    import archive
+    if not _require_admin(request):
+        return RedirectResponse("/login", status_code=303)
+    try:
+        if action == "rename":
+            ok = archive.rename(entry_id, name)
+            return _arch_back("ok" if ok else "err", "Переименовано." if ok else "Пустое название.")
+        if action == "refresh":
+            archive.refresh(entry_id)
+            return _arch_back("ok", "Снимок обновлён из книги.")
+        if action == "delete":
+            archive.delete(entry_id)
+            return _arch_back("ok", "Убрано из архива (сама книга в Google не тронута).")
+    except Exception as e:
+        traceback.print_exc()
+        return _arch_back("err", str(e))
+    return _arch_back("err", "Неизвестное действие.")
 
 
 @router.get("/admin/by_aroma")

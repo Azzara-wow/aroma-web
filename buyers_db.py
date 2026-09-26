@@ -7,6 +7,8 @@
 #            реквизиты перевода, ссылка отслеживания. Хозяин — дашборд: он присылает счёт
 #            через закрытый канал (sync_api), витрина только показывает.
 #
+# Там же архив закупок (archive, см. archive.py) и мелкие настройки витрины (site_state).
+#
 # Файл базы — рядом с кодом (buyers.db) или путь из BUYERS_DB. Лист «Покупатели» больше не
 # источник: раз в сутки туда выгружается копия только для просмотра (buyers_sheet_io.py).
 
@@ -51,6 +53,17 @@ CREATE TABLE IF NOT EXISTS bills (
     pay_to TEXT NOT NULL DEFAULT '',
     tracking_url TEXT NOT NULL DEFAULT '',
     updated TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS archive (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL DEFAULT '',
+    url TEXT NOT NULL DEFAULT '',
+    archived_at TEXT NOT NULL DEFAULT '',
+    snapshot TEXT NOT NULL DEFAULT '{}'
+);
+CREATE TABLE IF NOT EXISTS site_state (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT ''
 );
 """
 

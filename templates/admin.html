@@ -94,6 +94,58 @@
     </form>
 </details>
 
+<details id="archive" style="margin:0 0 16px; padding:12px 14px; border-radius:8px; background:#1a1d23;" {{ 'open' if arch_result or current_archived or not orders_open }}>
+    <summary style="font-size:14px;">🗂 Архив закупок {% if archive_list %}<span style="opacity:.6;">({{ archive_list|length }})</span>{% endif %}</summary>
+    {% if arch_result %}<div class="result {{ 'ok' if arch_result == 'ok' else 'err' }}" style="margin:10px 0;">{{ request.query_params.get('t', '') }}</div>{% endif %}
+
+    {% if current_archived %}
+    <div style="font-size:13px; line-height:1.5; margin:10px 0; opacity:.9;">Текущая книга уже в архиве, витрина пишет «следующая закупка скоро».
+        Чтобы начать новую — вставь ссылку на её книгу в «📄 Книга закупки» выше, потом открой приём.</div>
+    {% elif orders_open %}
+    <div style="font-size:13px; margin:10px 0; opacity:.75;">Перевести в архив можно, когда приём заказов закрыт.</div>
+    {% else %}
+    <form method="post" action="/admin/archive/current" style="margin:10px 0;"
+          onsubmit="return confirm('Перевести закупку в архив? Витрина перестанет её показывать, у девочек она будет во вкладке «Архив».')">
+        <label style="margin-top:0;">Название в архиве</label>
+        <input type="text" name="name" value="{{ book_title }}" placeholder="Например: LUZI09 · сентябрь 2026">
+        <button type="submit" style="width:100%; margin-top:10px; background:#6b4f2a;">📦 Перевести закупку в архив</button>
+    </form>
+    {% endif %}
+
+    {% for a in archive_list %}
+    <div style="padding:10px 0; border-top:1px solid #2a2d34; font-size:14px;">
+        <div><a href="/archive/{{ a.id }}" style="color:#8ab4f7; font-weight:600;">{{ a.name }}</a>
+            <span style="opacity:.6; font-size:12px;"> · {{ a.archived_at[:10] }} · участниц {{ a.n_buyers }} · {{ a.grand_total }} ₽</span></div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
+            <a href="{{ a.url }}" target="_blank" rel="noopener" style="font-size:12px; color:#8ab4f7;">книга в Google ↗</a>
+            <form method="post" action="/admin/archive/{{ a.id }}" style="margin:0; display:flex; gap:4px;">
+                <input type="hidden" name="action" value="rename">
+                <input type="text" name="name" value="{{ a.name }}" style="padding:4px 6px; font-size:12px; width:150px;">
+                <button type="submit" style="padding:4px 8px; font-size:12px; background:#3a4150;">✎</button>
+            </form>
+            <form method="post" action="/admin/archive/{{ a.id }}" style="margin:0;">
+                <input type="hidden" name="action" value="refresh">
+                <button type="submit" style="padding:4px 8px; font-size:12px; background:#3a4150;" title="Перечитать книгу, если в ней что-то поправила">⟳ переснять</button>
+            </form>
+            <form method="post" action="/admin/archive/{{ a.id }}" style="margin:0;"
+                  onsubmit="return confirm('Убрать «{{ a.name }}» из архива витрины? Книга в Google останется.')">
+                <input type="hidden" name="action" value="delete">
+                <button type="submit" style="padding:4px 8px; font-size:12px; background:#4a2a2a;">✕</button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+
+    <details style="margin-top:10px;">
+        <summary style="font-size:13px; opacity:.8;">➕ Добавить прошлую закупку по ссылке</summary>
+        <form method="post" action="/admin/archive/add" style="margin-top:8px;">
+            <input type="text" name="name" placeholder="Название (например: Luzi06)" style="margin-bottom:8px;">
+            <input type="url" name="url" placeholder="https://docs.google.com/spreadsheets/d/..." required>
+            <button type="submit" style="width:100%; margin-top:8px; background:#3a4150;">Добавить в архив</button>
+        </form>
+    </details>
+</details>
+
 <h1>Внесение заказов (закупка)</h1>
 
 {% if result %}

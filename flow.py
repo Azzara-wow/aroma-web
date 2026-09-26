@@ -176,9 +176,18 @@ def add_order(phone_raw, name, aroma, volume, direction=DIR_PLUS):
 #  Чтение (для витрины, "Моё" и счёта)
 # ======================================================================
 
-def net_orders():
-    """Полная свёртка Потока: phone -> {"name", "aromas": {аромат: мл}}. Для счёта."""
-    return _aggregate(_values())
+def _values_of(url):
+    """Поток ДРУГОЙ книги (архивной) — без кэша и без создания листа. Нет Потока — []."""
+    for w in sheets.open_book(url).worksheets():
+        if w.title.strip().lower() == FLOW_SHEET_NAME.lower():
+            return w.get_all_values()
+    return []
+
+
+def net_orders(url=None):
+    """Полная свёртка Потока: phone -> {"name", "aromas": {аромат: мл}}. Для счёта.
+    url — другая книга (снимок архивной закупки); по умолчанию текущая."""
+    return _aggregate(_values_of(url) if url else _values())
 
 
 def collected_map():

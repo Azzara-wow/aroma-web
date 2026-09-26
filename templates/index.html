@@ -239,6 +239,20 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
 .mine-sum .ms-payto{font-weight:700; font-size:16px; margin:4px 0 8px; color:var(--green); word-break:break-word}
 .mine-sum .ms-copy{width:100%; padding:10px; border:0; border-radius:3px; background:var(--green); color:#fbf6ec;
   font-family:var(--sans); font-weight:700; font-size:14px; cursor:pointer}
+.notice{margin:0 0 12px; padding:11px 14px; background:#f6efe3; border:1px solid #e7c3b6; border-radius:10px;
+  color:#9a5643; font-size:13.5px; text-align:center; line-height:1.45}
+.notice.arch{background:var(--panel); border-color:var(--line); color:var(--green)}
+.notice a{color:var(--clay-deep); font-weight:700}
+#archive-block{padding:10px 18px 24px}
+.arch-card{display:flex; justify-content:space-between; align-items:center; gap:10px; background:var(--panel);
+  border:1px solid var(--line); border-radius:10px; padding:13px 14px; margin-bottom:9px; text-decoration:none; color:inherit}
+.arch-name{font-weight:700; color:var(--green); font-size:15px}
+.arch-meta{font-size:12px; color:var(--ink-soft); margin-top:3px}
+.arch-go{color:var(--clay); font-weight:700; font-size:18px}
+.ms-dl{display:flex; gap:8px; align-items:center; margin-top:12px; padding-top:10px; border-top:1px dashed var(--line);
+  font-size:13px; color:var(--ink-soft)}
+.ms-dl a{flex:1; text-align:center; padding:8px; border:1px solid var(--clay-soft); border-radius:3px;
+  color:var(--clay-deep); font-weight:700; text-decoration:none; background:var(--cream)}
 .paid-ok{margin:12px 18px 0; padding:12px; text-align:center; border-radius:3px; font-size:14px; font-weight:700;
   background:rgba(44,79,44,.09); border:1px solid rgba(44,79,44,.25); color:var(--green)}
 </style>
@@ -259,15 +273,22 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
 
   {% if is_admin %}<a class="admin-door" href="/admin">🔑 Организаторская</a>{% endif %}
   {% if not is_auth %}<a class="login-cta" href="/login">Чтобы заказать и видеть «Моё» — войдите</a>{% endif %}
-  {% if not orders_open %}
-  <div style="margin:0 0 12px; padding:11px 14px; background:#f6efe3; border:1px solid #e7c3b6; border-radius:10px; color:#9a5643; font-size:13.5px; text-align:center; line-height:1.45;">
+  {% if archive_entry %}
+  <div class="notice arch">📦 Архив · <b>{{ archive_entry.name }}</b> · {{ archive_entry.archived_at[:10] }}<br>
+    Закупка завершена, здесь её можно только посмотреть. <a href="/">← к текущей витрине</a></div>
+  {% elif between %}
+  <div class="notice">Закупка{% if between.name %} «{{ between.name }}»{% endif %} завершена и перенесена в «Архив» — там ваши заказы.
+    Следующая закупка — скоро. Наличие (склад) заказать можно.</div>
+  {% elif not orders_open %}
+  <div class="notice">
     Закупка завершена — приём заказов по закупке закрыт. Наличие (склад) заказать можно; цены и «Моё» доступны.
   </div>
   {% endif %}
-  {% if is_auth and not delivery_complete %}
+  {% if archive_entry %}{% elif is_auth and not delivery_complete %}
     <button class="deliv-cta" type="button" onclick="gotoDelivery()">📦 Заполните данные для отправки — {{ 'ФИО и адрес' if deliv.carrier_manual else 'ФИО и пункт выдачи' }}</button>
   {% endif %}
-  {% if is_auth and deliv.paid %}
+  {% if archive_entry %}
+  {% elif is_auth and deliv.paid %}
     <div class="paid-ok">✓ Заказ оплачен. Спасибо!</div>
   {% elif is_auth and deliv.pay_link %}
     <a class="pay-cta" href="{{ deliv.pay_link }}" target="_blank" rel="noopener">💳 К оплате{% if deliv.pay_amount %}: {{ deliv.pay_amount }} ₽{% endif %} — оплатить заказ</a>
@@ -282,11 +303,12 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
   </div>
 
   <div class="controls">
-    {% if has_nalichie or has_catalog or has_info %}
+    {% if has_nalichie or has_catalog or has_info or has_archive %}
     <div class="tabs top">
       {% if has_nalichie %}<button class="tab special" data-tab="Наличие">Наличие</button>{% endif %}
       {% if has_catalog %}<button class="tab special" data-tab="Ассортимент">Ассортимент</button>{% endif %}
       {% if has_info %}<button class="tab special" data-tab="Информация">ℹ️ Информация</button>{% endif %}
+      {% if has_archive %}<button class="tab special" data-tab="Архив">🗂 Архив</button>{% endif %}
     </div>
     {% endif %}
     <div class="search">
@@ -295,7 +317,7 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
     </div>
     <div class="tabs bottom" id="tabs">
       {% for t in cat_tabs %}<button class="tab{% if t == 'Общее' %} active{% endif %}" data-tab="{{ t }}">{{ t }}</button>{% endfor %}
-      {% if is_auth %}<button class="mode" data-mode="mine">Моё</button><button class="mode deliv-tab" data-mode="delivery">📦 Доставка</button>{% endif %}
+      {% if is_auth %}<button class="mode" data-mode="mine">Моё</button>{% if not archive_entry %}<button class="mode deliv-tab" data-mode="delivery">📦 Доставка</button>{% endif %}{% endif %}
     </div>
   </div>
 
@@ -303,7 +325,18 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
 
   {% if is_auth %}
   <div id="mine-sum" class="mine-sum" hidden>
-    {% if deliv.pay_amount %}
+    {% if archive_entry %}
+      {% if arch_mine %}
+      {% set ab = arch_mine.bill or {} %}
+      {% set a_deliv = (ab.pay_delivery or 0)|int %}
+      <div class="ms-title">🧾 Моя закупка «{{ archive_entry.name }}»</div>
+      <div class="ms-line"><span>Заказ</span><span>{{ arch_mine.total }} ₽</span></div>
+      {% if a_deliv %}<div class="ms-line"><span>Доставка</span><span>{{ a_deliv }} ₽</span></div>{% endif %}
+      {% if ab.pay_amount %}<div class="ms-line ms-total"><span>{{ 'Оплачено' if ab.paid else 'Итого к оплате' }}</span><b>{{ ab.pay_amount|int }} ₽{% if ab.paid %} ✓{% endif %}</b></div>{% endif %}
+      {% else %}
+      В этой закупке у вас не было заказов.
+      {% endif %}
+    {% elif deliv.pay_amount %}
       {% set bill_total = deliv.pay_amount|int %}
       {% set bill_deliv = (deliv.pay_delivery or 0)|int %}
       <div class="ms-title">🧾 Счёт по закупке</div>
@@ -324,6 +357,13 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
       💰 Ваш заказ по закупке: <b>{{ zakupka_mine_sum }} ₽</b>
       {% if nal_mine_sum %}<span class="ms-nal"> · наличие: {{ nal_mine_sum }} ₽</span>{% endif %}
       <div class="ms-note">Сумма пересчитывается по мере заказа. К оплате — когда организатор пришлёт счёт: заказ и доставка отдельными строками.</div>
+    {% endif %}
+    {% if (archive_entry and arch_mine) or (not archive_entry and not between) %}
+    {% set zkey = archive_entry.id if archive_entry else 'current' %}
+    <div class="ms-dl"><span>Скачать:</span>
+      <a href="/my/export?z={{ zkey }}&fmt=pdf">PDF</a>
+      <a href="/my/export?z={{ zkey }}&fmt=xlsx">Excel</a>
+    </div>
     {% endif %}
   </div>
   {% endif %}
@@ -388,7 +428,7 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
         <div class="hint">Уменьшить объём можно через организатора — напишите в чат.</div>
         {% endif %}
 
-        {% if is_admin %}
+        {% if is_admin and not archive_entry %}
         <div class="who" data-aroma="{{ aroma.aroma_name }}" data-loaded="0" onclick="event.stopPropagation()"
              style="margin-top:12px; padding:10px 12px; background:rgba(0,0,0,.05); border:1px solid rgba(0,0,0,.08); border-radius:8px;">
           <div style="font-size:13px; font-weight:700; opacity:.7; margin-bottom:6px;">👁 Кто набрал — только тебе</div>
@@ -453,6 +493,18 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
     </li>
   {% endfor %}
   </ul>
+
+  <div id="archive-block" hidden>
+    {% for a in archive_list %}
+    <a class="arch-card" href="/archive/{{ a.id }}">
+      <div>
+        <div class="arch-name">{{ a.name }}</div>
+        <div class="arch-meta">завершена {{ a.archived_at[:10] }} · участниц: {{ a.n_buyers }}</div>
+      </div>
+      <span class="arch-go">›</span>
+    </a>
+    {% endfor %}
+  </div>
 
   <div id="info-block" hidden>
     {% for it in info_items %}
@@ -593,7 +645,7 @@ body{background:#eef0e6; color:var(--ink); font-family:var(--sans);
 <div id="toast">Готово</div>
 
 <script>
-let curTab = "Общее";
+let curTab = {{ start_tab|tojson }};
 let curMode = "category";
 
 function toggleItem(head){
@@ -808,6 +860,9 @@ function applyView(){
   const q = (document.getElementById("search").value || "").trim().toLowerCase();
   const delivMode = (curMode === "delivery");
   const infoTab = (curMode === "category" && curTab === "Информация");
+  const archTab = (curMode === "category" && curTab === "Архив");
+  const archBlock = document.getElementById("archive-block");
+  if (archBlock) archBlock.hidden = !archTab;
   const infoBlock = document.getElementById("info-block");
   const delivBlock = document.getElementById("delivery-block");
   if (infoBlock) infoBlock.hidden = !infoTab;
@@ -821,7 +876,7 @@ function applyView(){
   const listEl = document.getElementById("list");
   const secEl = document.querySelector(".seclabel");
   if (listEl) listEl.style.display = delivMode ? "none" : "";
-  if (secEl) secEl.style.display = delivMode ? "none" : "";
+  if (secEl) secEl.style.display = (delivMode || archTab) ? "none" : "";
 
   document.querySelectorAll("#list .item").forEach(item => {
     const name = (item.dataset.name || "").toLowerCase();
@@ -831,7 +886,7 @@ function applyView(){
     const ordered = parseInt(item.dataset.ordered || "0", 10) || 0;
     const source = item.dataset.source || "zakupka";
     let visible;
-    if (delivMode || infoTab) visible = false;
+    if (delivMode || infoTab || archTab) visible = false;
     else if (curMode === "mine") visible = ordered > 0;
     else if (curTab === "Наличие") visible = source === "nalichie";
     else if (curTab === "Ассортимент") visible = source === "catalog";

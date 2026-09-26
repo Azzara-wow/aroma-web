@@ -26,6 +26,8 @@ import notify
 import info
 import orders_state
 import sync_api
+import archive
+import export_mine
 
 app = FastAPI()
 app.include_router(admin.router)
@@ -77,11 +79,18 @@ def index(request: Request):
     tab = request.query_params.get("tab", "Общее")
 
     try:
-        df_raw = core.load_data()
-        all_rows, _ = core.prepare_dataframe(df_raw)  # покупателей матрицы больше нет
+        # Закупку перевели в архив, новой книги ещё нет: закупку не показываем и не читаем
+        between = archive.current_is_archived()
+        archive_list = archive.entries()
+        if between:
+            all_rows = []
+            collected, mine = {}, {}
+        else:
+            df_raw = core.load_data()
+            all_rows, _ = core.prepare_dataframe(df_raw)  # покупателей матрицы больше нет
+            # Данные заказов из Потока — за ОДНО чтение (набрано всеми + моё).
+            collected, mine = flow.board(user["phone"] if is_auth else None)
 
-        # Данные заказов из Потока — за ОДНО чтение (набрано всеми + моё).
-        collected, mine = flow.board(user["phone"] if is_auth else None)
         for x in all_rows:
             x["collected"] = collected.get(x["aroma_name"], 0)
             # «Осталось» считаем от СТАБИЛЬНОЙ цели минус ЖИВОЕ набрано (не от лагающей
@@ -104,13 +113,7 @@ def index(request: Request):
         visible = [x for x in all_rows if x["status"] not in ("hide", "сервис")]
 
         # Вкладки ЗАКУПКИ (под строкой поиска).
-        base_tabs = ["Общее", "Духи", "Отдушки", "База", "Разное", "Флаконы"]
-        present = {x["category"] for x in all_rows}
-        cat_tabs = [t for t in base_tabs if t == "Общее" or t in present]
-        if any(x["is_new"] for x in all_rows):
-            cat_tabs.append("Новинки")
-        if any(x["is_dobor"] for x in all_rows):
-            cat_tabs.append("Добор")
+        cat_tabs = _cat_tabs(all_rows) if all_rows else []
 
         # Наличие (вторая книга). Если недоступна — витрина закупки всё равно грузится.
         nalichie_items, nal_mine_sum = [], 0
@@ -151,7 +154,12 @@ def index(request: Request):
                 "has_catalog": bool(catalog_items),
                 "has_info": bool(info_items),
                 "is_admin": users.is_admin(user) if is_auth else False,
-                "orders_open": orders_state.is_open(),   # приём заказов открыт/закрыт
+                "orders_open": orders_state.is_open() and not between,   # приём заказов открыт/закрыт
+                "between": archive_list[0] if between and archive_list else ({"name": ""} if between else None),
+                "archive_list": archive_list,
+                "has_archive": bool(archive_list),
+                "archive_entry": None,
+                "start_tab": ("Наличие" if between and nalichie_items else "Общее"),
                 # данные доставки: плашка горит, пока не заполнено (гостю не показываем)
                 "delivery_complete": (user.get("delivery_complete", False) if is_auth else True),
                 "deliv": {
@@ -298,6 +306,88 @@ def save_email(request: Request, email: str = Form("")):
     return JSONResponse({"ok": True, "email": (email or "").strip()})
 
 
+def _cat_tabs(rows):
+    base_tabs = ["Общее", "Духи", "Отдушки", "База", "Разное", "Флаконы"]
+    present = {x["category"] for x in rows}
+    tabs = [t for t in base_tabs if t == "Общее" or t in present]
+    if any(x.get("is_new") for x in rows):
+        tabs.append("Новинки")
+    if any(x.get("is_dobor") for x in rows):
+        tabs.append("Добор")
+    return tabs
+
+
+@app.get("/archive/{entry_id}", response_class=HTMLResponse)
+def archive_view(request: Request, entry_id: int):
+    """Архивная закупка — как витрина, только смотреть. У вошедшей — своё «Моё»."""
+    e = archive.get(entry_id)
+    if not e:
+        return RedirectResponse("/", status_code=303)
+    user = auth.current_user(request)
+    is_auth = bool(user)
+    my = archive.mine_of(e, user["phone"]) if is_auth else None
+    mine_ml = {}
+    for it in (my or {}).get("items", []):
+        mine_ml[it["aroma"]] = mine_ml.get(it["aroma"], 0) + it["volume"]
+    rows = []
+    for x in e["snapshot"].get("positions", []):
+        x = dict(x)
+        x["ordered_ml"] = mine_ml.get(x["aroma_name"], 0)
+        rows.append(x)
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "aromas": rows, "nalichie": [], "nal_mine_sum": 0,
+        "zakupka_mine_sum": (my or {}).get("total", 0),
+        "catalog_items": [], "info_items": [],
+        "user_name": user["name"] if is_auth else "", "is_auth": is_auth,
+        "tab": "Общее", "cat_tabs": _cat_tabs(rows),
+        "has_nalichie": False, "has_catalog": False, "has_info": False,
+        "is_admin": users.is_admin(user) if is_auth else False,
+        "orders_open": False, "delivery_complete": True, "deliv": {},
+        "between": None, "archive_list": [], "has_archive": False,
+        "archive_entry": e, "arch_mine": my,
+        "start_tab": "Общее",
+    })
+
+
+@app.get("/my/export")
+def my_export(request: Request, z: str = "current", fmt: str = "pdf"):
+    """Скачать «Моё» (текущей или архивной закупки) в PDF или Excel."""
+    user = auth.current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    try:
+        if z == "current":
+            title = archive.book_title() or "Текущая закупка"
+            my = None if archive.current_is_archived() else archive.mine_current(user["phone"])
+            nal = []
+            try:
+                items, _ = nalichie.view(user["phone"])
+                nal = [x for x in items if x.get("mine")]
+            except Exception:
+                traceback.print_exc()
+        else:
+            e = archive.get(int(z))
+            if not e:
+                return RedirectResponse("/", status_code=303)
+            title, my, nal = e["name"], archive.mine_of(e, user["phone"]), []
+        name = (my or {}).get("name") or user["name"]
+        if fmt == "xlsx":
+            data = export_mine.xlsx(title, name, user["phone"], my, nal)
+            media, ext = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"
+        else:
+            data = export_mine.pdf(title, name, user["phone"], my, nal)
+            media, ext = "application/pdf", "pdf"
+    except Exception:
+        traceback.print_exc()
+        return HTMLResponse("<p style='font-family:system-ui;padding:24px'>Не получилось собрать файл, "
+                            "попробуйте ещё раз через минуту. <a href='/'>На витрину</a></p>", status_code=503)
+    from urllib.parse import quote
+    fname = f"LUZI {title} - моё.{ext}"
+    return Response(content=data, media_type=media, headers={
+        "Content-Disposition": f"attachment; filename=\"luzi-moe.{ext}\"; filename*=UTF-8''{quote(fname)}"})
+
+
 class OrderIn(BaseModel):
     zakupka: dict = {}    # {аромат: добавить_мл} -> поток закупки
     nalichie: dict = {}   # {товар: добавить}     -> поток наличия
@@ -313,7 +403,7 @@ def order(request: Request, payload: OrderIn):
     if not user:
         return JSONResponse({"ok": False, "reason": "not_authenticated"}, status_code=401)
     # Закрытие гасит ТОЛЬКО закупку; Наличие (склад) заказывается всегда.
-    zak_items = payload.zakupka if orders_state.is_open() else {}
+    zak_items = payload.zakupka if (orders_state.is_open() and not archive.current_is_archived()) else {}
     try:
         res_z = flow.add_batch(user["phone"], user["name"], zak_items) \
             if zak_items else {"ok": True, "changes": []}

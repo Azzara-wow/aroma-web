@@ -1,7 +1,7 @@
 # sheets.py — aroma_web / единая точка подключения к гуглтаблицам.
 #
 # Поддерживает НЕСКОЛЬКО книг (закупка + Наличие) на одном сервисном аккаунте:
-#   - без аргумента url работаем с книгой закупки (core.SHEET_URL);
+#   - без аргумента url работаем с ТЕКУЩЕЙ книгой закупки (core.current_source_url());
 #   - с url="..." — с любой другой книгой (напр. Наличие).
 # Подключение (клиент, книги, листы) кэшируется на процесс; ретраи и таймаут —
 # на обрывах канала (частая беда доступа к Google из РФ).
@@ -29,8 +29,8 @@ _ws_gid = {}         # (id, gid) -> Worksheet
 
 
 def spreadsheet_id(url: str = None) -> str:
-    """ID книги из url (или core.SHEET_URL по умолчанию)."""
-    parts = urlparse(url or core.SHEET_URL).path.split("/")
+    """ID книги из url (по умолчанию — текущая книга закупки)."""
+    parts = urlparse(url or core.current_source_url()).path.split("/")
     return parts[parts.index("d") + 1]
 
 
