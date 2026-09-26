@@ -144,6 +144,8 @@ def build_invoices():
             d["positions"].append({
                 "aroma": meta["name"], "volume": int(vol),
                 "per_ml": calc["per_ml"], "amount": calc["amount"],
+                # штучный товар (База): объём = штук, не разливается (для дашборда)
+                "piece": meta["category"] in core.PIECE_CATEGORIES,
             })
             d["total"] += calc["amount"]
             export_rows.append([f"{phone} - {buyer}", meta["name"], int(vol), calc["per_ml"], calc["amount"]])

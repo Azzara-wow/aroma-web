@@ -56,5 +56,6 @@ def sync_zakupka(request: Request):
                 "volume": p["volume"],
                 "per_ml": p["per_ml"],
                 "amount": p["amount"],
+                "piece": bool(p.get("piece")),
             })
     return {"ok": True, "rows": rows, "problems": data["problems"]}
