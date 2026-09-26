@@ -115,7 +115,7 @@ def build_invoices():
     except Exception:
         user_rows = []
     current_names = {u["phone"]: u["name"] for u in user_rows if u["name"]}
-    # доставка и оплата — из счёта, который выставил дашборд (лист «Покупатели», S/T)
+    # доставка и оплата — из счёта, который выставил дашборд (база покупателей, таблица bills)
     bill = {u["phone"]: u for u in user_rows}
 
     details = []

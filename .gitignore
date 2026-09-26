@@ -5,4 +5,6 @@ __pycache__/
 /service_account.json
 /test_write.py
 test_write.py
-service_account.json
+service_account.json/buyers.db
+/buyers.db-*
+/backups/

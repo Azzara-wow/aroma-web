@@ -1,66 +1,28 @@
-# users.py — aroma_web / лист "Пользователи" (Шаг 3).
+# users.py — aroma_web / покупатели: вход и профиль (Шаг 3).
 #
 # Отвечает ТОЛЬКО за личность покупателя: нормализация телефона, хеширование
 # кода, регистрация, вход, сброс/установка кода, правка адреса/имени.
 # Веб-слой (формы, куки, лимит попыток) — НЕ здесь, а в маршрутах.
 #
-# ПРИВАТНОСТЬ: телефоны, адреса и хеши кодов вынесены в ОТДЕЛЬНУЮ приватную книгу
-# «Покупатели» (USERS_URL), не в книге закупки. Читаем/пишем только через сервисный
-# аккаунт. Публичный CSV для Пользователей не используется никогда.
+# ХРАНЕНИЕ: база buyers.db (buyers_db.py). Глобальное (телефон, имя, код-хеш, ФИО, ПВЗ,
+# перевозчик, e-mail) — таблица buyers; счёт текущей закупки — таблица bills, его
+# присылает дашборд. Лист «Покупатели» в гугл-таблице больше НЕ источник: раз в сутки
+# туда выгружается копия только для просмотра (buyers_sheet_io.py).
 #
-# КОНТРАКТ ЛИСТА (позиции, 0-индексация; шапка в строке 1):
-#   0  A — телефон (канон 7XXXXXXXXXX) — КЛЮЧ личности
-#   1  B — имя (только отображение, не ключ)
-#   2  C — код-хеш (самоописывающаяся строка pbkdf2_sha256$iters$salt$hash)
-#   3  D — адрес / доставка (свободный текст)
-#   4  E — роль (покупатель / организатор)
-#   5  F — создан (дата-время регистрации)
-#   6  G — заметка организатора (свободное поле для Елены)
-#
-# Восстановление кода: организатор вручную ОЧИЩАЕТ ячейку C у нужной строки.
-# Тогда при следующем входе телефон найдётся, но кода нет -> человек задаёт код
-# заново (set_code). SMS/почты у нас нет — это осознанно ручной путь.
+# Восстановление кода: организатор жмёт «Сбросить код» в дашборде. Тогда при следующем
+# входе телефон найдётся, но кода нет -> человек задаёт код заново (set_code).
 
 import os
 import base64
 import hashlib
 import secrets
-from datetime import datetime
 
+import buyers_db
 import core
-import sheets
 
-# Пользователи живут в ОТДЕЛЬНОЙ книге «Покупатели» (не в книге закупки).
-USERS_URL = "https://docs.google.com/spreadsheets/d/15PjPHqSl6Iju41VIZOGkCMwy4kyBomr_X9F60hYwo0U/edit"
-USERS_SHEET_NAME = "Пользователи"
-
-# --- позиции столбцов ---
-COL_PHONE = 0
-COL_NAME = 1
-COL_CODE_HASH = 2
-COL_ADDRESS = 3
-COL_ROLE = 4
-COL_CREATED = 5
-COL_NOTE = 6
-# Доставка (колонки H–M) — покупатель заполняет сам на витрине для Яндекс Доставки.
-COL_LAST = 7        # Фамилия
-COL_FIRST = 8       # Имя
-COL_PATR = 9        # Отчество
-COL_CITY = 10       # Город
-COL_PVZ_ADDR = 11   # ПВЗ адрес (человекочитаемо)
-COL_PVZ_ID = 12     # ПВЗ id (platform_id для API)
-COL_TRACKING = 13   # N — ссылка отслеживания (пишет дашборд после подтверждения доставки)
-COL_CARRIER = 14    # O — перевозчик выбранного ПВЗ: yandex | cdek
-COL_EMAIL = 15      # P — e-mail получателя (заполняет покупатель на витрине)
-COL_PAY_LINK = 16   # Q — ссылка на оплату (вносит организатор; покупатель видит «Оплатить»)
-COL_PAY_AMOUNT = 17 # R — сумма к оплате = закупка + доставка (пишет дашборд)
-COL_PAY_DELIVERY = 18  # S — доставка в счёте, ₽ (Яндекс за наш счёт → строкой в счёт)
-COL_PAID = 19       # T — «оплачено» (организатор отметил оплату в дашборде)
-COL_PAY_TO = 20     # U — куда переводить при оплате на карту («+79131967569 Яндекс»)
-
-# Перевозчики, которых покупатель выбирает сам. Любое другое значение в колонке O
+# Перевозчики, которых покупатель выбирает сам. Любое другое значение перевозчика
 # («Почта России», «Озон», «Wildberries»…) вписывает ТОЛЬКО организатор — это ручная
-# доставка по договорённости: вместо ПВЗ покупатель пишет свободный адрес (в колонку L).
+# доставка по договорённости: вместо ПВЗ покупатель пишет свободный адрес (в поле ПВЗ-адреса).
 SELF_CARRIERS = ("yandex", "cdek")
 
 
@@ -69,8 +31,6 @@ def manual_carrier(raw):
     v = (raw or "").strip()
     return "" if v.lower() in ("",) + SELF_CARRIERS else v
 
-
-HEADER = ["телефон", "имя", "код-хеш", "адрес", "роль", "создан", "заметка"]
 
 ROLE_BUYER = "покупатель"
 ROLE_ADMIN = "организатор"
@@ -139,67 +99,45 @@ def verify_code(code: str, stored: str) -> bool:
 
 
 # ======================================================================
-#  Доступ к листу
+#  Доступ к базе
 # ======================================================================
 
-def _ws():
-    """Лист 'Пользователи' в книге «Покупатели» (создаётся с шапкой, если его нет)."""
-    return sheets.get_or_create_ws(USERS_SHEET_NAME, HEADER, USERS_URL)
-
-
-USERS_TTL = 30   # сек — короткий кэш чтений листа Пользователи
-
-
-def _values():
-    """Значения листа Пользователи с коротким кэшем (сброс при записи)."""
-    return sheets.vget("users", USERS_TTL, lambda: _ws().get_all_values())
-
-
-def _find_row(values, canon: str):
-    """0-индекс строки пользователя в values по канону телефона. None если нет."""
-    for r in range(1, len(values)):  # строка 0 — шапка
-        stored = values[r][COL_PHONE] if COL_PHONE < len(values[r]) else ""
-        if normalize_phone(stored) == canon:
-            return r
-    return None
-
-
-def _row_to_user(row, idx: int) -> dict:
-    """Строка листа -> словарь пользователя (код-хеш наружу не отдаём как значение
-    для показа, но он нужен маршруту входа, поэтому оставляем в 'code_hash')."""
-    def c(i):
-        return core.norm(row[i]) if i < len(row) else ""
-    last, first, patr = c(COL_LAST), c(COL_FIRST), c(COL_PATR)
-    pvz_id = c(COL_PVZ_ID)
-    manual = manual_carrier(c(COL_CARRIER))
+def _row_to_user(rec) -> dict:
+    """Запись базы (покупатель + текущий счёт) -> словарь пользователя (код-хеш наружу
+    не показываем, но он нужен маршруту входа, поэтому оставляем в 'code_hash')."""
+    def c(k):
+        return core.norm(rec.get(k))
+    last, first, patr = c("last_name"), c("first_name"), c("patronymic")
+    pvz_id = c("pvz_id")
+    manual = manual_carrier(c("carrier"))
     return {
-        "row": idx,                       # 0-индекс в values (для точечной правки)
-        "phone": normalize_phone(c(COL_PHONE)),
-        "name": c(COL_NAME),
-        "code_hash": c(COL_CODE_HASH),
-        "address": c(COL_ADDRESS),
-        "role": c(COL_ROLE) or ROLE_BUYER,
-        "created": c(COL_CREATED),
-        "note": c(COL_NOTE),
-        # доставка
+        "phone": rec["phone"],
+        "name": c("name"),
+        "code_hash": rec.get("code_hash") or "",
+        "address": c("address"),
+        "role": c("role") or ROLE_BUYER,
+        "created": c("created"),
+        "note": c("note"),
+        # доставка (глобальное)
         "last_name": last,
         "first_name": first,
         "patronymic": patr,
-        "city": c(COL_CITY),
-        "pvz_address": c(COL_PVZ_ADDR),
+        "city": c("city"),
+        "pvz_address": c("pvz_address"),
         "pvz_id": pvz_id,
-        "tracking_url": c(COL_TRACKING),
-        "carrier": "manual" if manual else (c(COL_CARRIER).lower() or "yandex"),
+        "carrier": "manual" if manual else (c("carrier").lower() or "yandex"),
         "carrier_manual": manual,        # «Почта России» и т.п. — вписывает организатор
-        "email": c(COL_EMAIL),
-        "pay_link": c(COL_PAY_LINK),
-        "pay_amount": c(COL_PAY_AMOUNT),
-        "pay_delivery": c(COL_PAY_DELIVERY),
-        "paid": c(COL_PAID).lower().startswith("оплач"),
-        "pay_to": c(COL_PAY_TO),
+        "email": c("email"),
+        # счёт текущей закупки (присылает дашборд)
+        "tracking_url": c("tracking_url"),
+        "pay_link": c("pay_link"),
+        "pay_amount": c("pay_amount"),
+        "pay_delivery": c("pay_delivery"),
+        "paid": bool(rec.get("paid")),
+        "pay_to": c("pay_to"),
         # заполнено, если есть Фамилия+Имя и выбран ПВЗ (отчество API не требует)
-        # (ручная доставка: вместо ПВЗ — свободный адрес в колонке L)
-        "delivery_complete": bool(last and first and (c(COL_PVZ_ADDR) if manual else pvz_id)),
+        # (ручная доставка: вместо ПВЗ — свободный адрес в pvz_address)
+        "delivery_complete": bool(last and first and (c("pvz_address") if manual else pvz_id)),
     }
 
 
@@ -208,9 +146,8 @@ def get_user(phone_raw):
     canon = normalize_phone(phone_raw)
     if not valid_phone(canon):
         return None
-    values = _values()
-    idx = _find_row(values, canon)
-    return _row_to_user(values[idx], idx) if idx is not None else None
+    rec = buyers_db.get(canon)
+    return _row_to_user(rec) if rec else None
 
 
 def is_admin(user) -> bool:
@@ -220,38 +157,19 @@ def is_admin(user) -> bool:
 
 def list_users():
     """Список зарегистрированных: [{'phone','name'}] (для выбора в админке)."""
-    values = _values()
-    out = []
-    for r in range(1, len(values)):
-        row = values[r]
-        phone = normalize_phone(row[COL_PHONE] if COL_PHONE < len(row) else "")
-        if not valid_phone(phone):
-            continue
-        name = core.norm(row[COL_NAME]) if COL_NAME < len(row) else ""
-        cell = lambda i: core.norm(row[i]) if i < len(row) else ""
-        out.append({"phone": phone, "name": name,
-                    # счёт из дашборда — для строки доставки на странице счетов
-                    "pay_delivery": cell(COL_PAY_DELIVERY),
-                    "paid": cell(COL_PAID).lower().startswith("оплач")})
-    return out
+    return [{"phone": r["phone"], "name": core.norm(r["name"]),
+             # счёт из дашборда — для строки доставки на странице счетов
+             "pay_delivery": core.norm(r["pay_delivery"]),
+             "paid": bool(r["paid"])}
+            for r in buyers_db.all_buyers() if valid_phone(r["phone"])]
 
 
 def list_full():
     """Полный список: [{phone, name, role, has_code}] — для страницы покупателей."""
-    values = _values()
-    out = []
-    for r in range(1, len(values)):
-        row = values[r]
-        phone = normalize_phone(row[COL_PHONE] if COL_PHONE < len(row) else "")
-        if not valid_phone(phone):
-            continue
-        code = core.norm(row[COL_CODE_HASH]) if COL_CODE_HASH < len(row) else ""
-        out.append({
-            "phone": phone,
-            "name": core.norm(row[COL_NAME]) if COL_NAME < len(row) else "",
-            "role": (core.norm(row[COL_ROLE]) if COL_ROLE < len(row) else "") or ROLE_BUYER,
-            "has_code": code.startswith("pbkdf2"),
-        })
+    out = [{"phone": r["phone"], "name": core.norm(r["name"]),
+            "role": core.norm(r["role"]) or ROLE_BUYER,
+            "has_code": (r["code_hash"] or "").startswith("pbkdf2")}
+           for r in buyers_db.all_buyers() if valid_phone(r["phone"])]
     out.sort(key=lambda x: x["name"].lower())
     return out
 
@@ -267,16 +185,8 @@ def add_buyer(phone_raw, name, address="", role=ROLE_BUYER):
     name = (name or "").strip()
     if not name:
         return {"ok": False, "reason": "Укажите имя"}
-
-    ws = _ws()
-    values = _values()
-    if _find_row(values, canon) is not None:
+    if not buyers_db.insert(canon, name=name, address=address or "", role=role):
         return {"ok": False, "reason": "Этот телефон уже есть в списке"}
-
-    stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    row = [canon, name, "", (address or "").strip(), role, stamp, ""]  # код пустой
-    ws.append_row(row, value_input_option="RAW")
-    sheets.vdrop("users")
     return {"ok": True, "phone": canon, "name": name}
 
 
@@ -298,19 +208,10 @@ def register(phone_raw, name, code, address=""):
     code = (code or "").strip()
     if len(code) < MIN_CODE_LEN:
         return {"ok": False, "reason": f"Код минимум {MIN_CODE_LEN} символа"}
-
-    ws = _ws()
-    values = _values()
-    if _find_row(values, canon) is not None:
+    if not buyers_db.insert(canon, name=name, code_hash=hash_code(code),
+                            address=address or "", role=ROLE_BUYER):
         return {"ok": False, "reason": "Этот телефон уже зарегистрирован"}
-
-    stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    row = [canon, name, hash_code(code), (address or "").strip(), ROLE_BUYER, stamp, ""]
-    # RAW: пишем как есть, без интерпретации формул; телефон из 11 цифр Sheets
-    # хранит как целое и отдаёт обратно теми же цифрами — normalize_phone это стерпит.
-    ws.append_row(row, value_input_option="RAW")
-    sheets.vdrop("users")
-    return {"ok": True, "user": _row_to_user(row, len(values))}
+    return {"ok": True, "user": get_user(canon)}
 
 
 def verify_login(phone_raw, code):
@@ -333,95 +234,56 @@ def verify_login(phone_raw, code):
 
 def set_code(phone_raw, code):
     """
-    Задать/сменить код существующему телефону (используется после ручного сброса
-    организатором — очистки ячейки C). Телефон должен уже существовать.
+    Задать/сменить код существующему телефону (после сброса организатором — кнопка
+    «Сбросить код» в дашборде). Телефон должен уже существовать.
     """
     canon = normalize_phone(phone_raw)
     code = (code or "").strip()
     if len(code) < MIN_CODE_LEN:
         return {"ok": False, "reason": f"Код минимум {MIN_CODE_LEN} символа"}
-
-    ws = _ws()
-    values = _values()
-    idx = _find_row(values, canon)
-    if idx is None:
+    if not buyers_db.update(canon, code_hash=hash_code(code)):
         return {"ok": False, "reason": "not_found"}
+    return {"ok": True}
 
-    a1 = f"{sheets.col_a1(COL_CODE_HASH)}{idx + 1}"  # +1: gspread 1-индекс строки
-    ws.update_acell(a1, hash_code(code))
-    sheets.vdrop("users")
+
+def reset_code(phone_raw):
+    """Сброс кода организатором: при следующем входе девочка задаст новый."""
+    if not buyers_db.update(normalize_phone(phone_raw), code_hash=""):
+        return {"ok": False, "reason": "not_found"}
     return {"ok": True}
 
 
 def update_address(phone_raw, address):
     """Обновить адрес доставки (покупатель правит в профиле / при заказе)."""
-    canon = normalize_phone(phone_raw)
-    ws = _ws()
-    values = _values()
-    idx = _find_row(values, canon)
-    if idx is None:
+    if not buyers_db.update(normalize_phone(phone_raw), address=address or ""):
         return {"ok": False, "reason": "not_found"}
-    a1 = f"{sheets.col_a1(COL_ADDRESS)}{idx + 1}"
-    ws.update_acell(a1, (address or "").strip())
-    sheets.vdrop("users")
     return {"ok": True}
-
-
-def _ensure_col(ws, col_idx0, header):
-    """Расширить сетку листа до колонки col_idx0 включительно и подписать шапку."""
-    need = col_idx0 + 1
-    if ws.col_count < need:
-        ws.add_cols(need - ws.col_count)
-        try:
-            ws.update_acell(f"{sheets.col_a1(col_idx0)}1", header)
-        except Exception:
-            pass
 
 
 def set_delivery(phone_raw, last_name="", first_name="", patronymic="",
                  city="", pvz_address="", pvz_id="", carrier=""):
-    """Записать данные доставки (ФИО + город + ПВЗ) в H–M, перевозчика в O.
+    """Записать данные доставки (ФИО + город + ПВЗ) и перевозчика.
     E-mail сохраняется отдельно (set_email) — здесь не трогаем."""
     canon = normalize_phone(phone_raw)
-    ws = _ws()
-    values = _values()
-    idx = _find_row(values, canon)
-    if idx is None:
+    rec = buyers_db.get(canon)
+    if rec is None:
         return {"ok": False, "reason": "not_found"}
     # Ручного перевозчика ставит только организатор: покупатель его не выберет и не
     # затрёт. У ручной доставки ПВЗ-id нет (адрес свободный) — чистим, чтобы старый
     # ПВЗ Яндекса/СДЭКа не ушёл в автоматическую отправку.
-    # читаем ячейку перевозчика ЗАНОВО, мимо 30-секундного кэша: организатор могла
-    # только что вписать «Почта России», и старый кэш не должен её затереть
-    try:
-        current = ws.cell(idx + 1, COL_CARRIER + 1).value or ""
-    except Exception:
-        row = values[idx]
-        current = row[COL_CARRIER] if COL_CARRIER < len(row) else ""
-    if manual_carrier(current):
-        carrier, pvz_id = "", ""
-    elif (carrier or "").strip().lower() not in SELF_CARRIERS:
-        carrier = "yandex"
-    rng = f"{sheets.col_a1(COL_LAST)}{idx + 1}:{sheets.col_a1(COL_PVZ_ID)}{idx + 1}"
-    ws.update(range_name=rng, values=[[
-        (last_name or "").strip(), (first_name or "").strip(), (patronymic or "").strip(),
-        (city or "").strip(), (pvz_address or "").strip(), (pvz_id or "").strip(),
-    ]])
-    if carrier:
-        _ensure_col(ws, COL_CARRIER, "перевозчик")
-        ws.update_acell(f"{sheets.col_a1(COL_CARRIER)}{idx + 1}", carrier.strip())
-    sheets.vdrop("users")
+    fields = dict(last_name=last_name, first_name=first_name, patronymic=patronymic,
+                  city=city, pvz_address=pvz_address, pvz_id=pvz_id)
+    if manual_carrier(rec.get("carrier")):
+        fields["pvz_id"] = ""
+    else:
+        c = (carrier or "").strip().lower()
+        fields["carrier"] = c if c in SELF_CARRIERS else "yandex"
+    buyers_db.update(canon, **fields)
     return {"ok": True}
 
 
 def set_email(phone_raw, email=""):
-    """Записать только e-mail покупателя (колонка P). Отдельная кнопка на витрине."""
-    canon = normalize_phone(phone_raw)
-    ws = _ws()
-    idx = _find_row(_values(), canon)
-    if idx is None:
+    """Записать только e-mail покупателя. Отдельная кнопка на витрине."""
+    if not buyers_db.update(normalize_phone(phone_raw), email=email or ""):
         return {"ok": False, "reason": "not_found"}
-    _ensure_col(ws, COL_EMAIL, "email")
-    ws.update_acell(f"{sheets.col_a1(COL_EMAIL)}{idx + 1}", (email or "").strip())
-    sheets.vdrop("users")
     return {"ok": True}

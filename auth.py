@@ -94,7 +94,7 @@ def _clear_cookie(response):
 
 
 def current_user(request: Request):
-    """Текущий пользователь (dict из users) или None. Читает лист Пользователи."""
+    """Текущий пользователь (dict из users) или None. Читает базу покупателей."""
     token = request.cookies.get(COOKIE_NAME)
     if not token:
         return None
